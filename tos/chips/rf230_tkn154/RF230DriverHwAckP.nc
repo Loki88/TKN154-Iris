@@ -631,12 +631,6 @@ implementation
 		uint32_t time32;
 		void* timesync;
 
-printf("\tRadioSendExtended.send()\r\n");
-printf("cmd != CMD_NONE -> %d\r\n", cmd != CMD_NONE);
-printf("state != STATE_RX_ON -> %d\r\n", state != STATE_RX_ON);
-printf("! isSpiAcquired() -> %d\r\n", !isSpiAcquired());
-printf("radioIrq -> %d\r\n", radioIrq);
-
 		if( cmd != CMD_NONE || state != STATE_RX_ON || ! isSpiAcquired() || radioIrq )
 			return EBUSY;
 
@@ -724,7 +718,7 @@ printf(" ****** length %d ****** \r\n", length);
 		// first upload the header to gain some time
 		do {
 			call FastSpiByte.splitReadWrite(*(data++));
-printf("%x ", *(data - 1));
+printf("%02x ", *(data - 1));
 		}
 		while( --header != 0 );
 
@@ -744,7 +738,7 @@ printf("%x ", *(data - 1));
 
 		while( length-- != 0 ){
 			call FastSpiByte.splitReadWrite(*(data++));
-printf("%x ", *(data - 1));
+printf("%02x ", *(data - 1));
 		}
 
 printf("\r\n");
@@ -1042,8 +1036,10 @@ printf("\r\n");
 
 		if( cmd != CMD_NONE )
 		{
-			if( cmd == CMD_DOWNLOAD )
+			if( cmd == CMD_DOWNLOAD ){
+				printf("CMD_DOWNLOAD\r\n");
 				downloadMessage();
+			}
 			else if( CMD_TURNOFF <= cmd && cmd <= CMD_TURNON )
 				changeState();
 			else if( cmd == CMD_CHANNEL )

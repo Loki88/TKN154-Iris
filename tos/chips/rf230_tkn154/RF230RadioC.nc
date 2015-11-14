@@ -50,7 +50,7 @@ configuration RF230RadioC
 		interface SlottedCsmaCa;
 		interface EnergyDetection;
 		interface Resource as SendResource;
-		interface PacketAcknowledgements;
+		// interface PacketAcknowledgements;
 
 		interface Set<bool> as RadioPromiscuousMode;
 
@@ -100,9 +100,9 @@ implementation
 
 // -------- TKN154RadioC
 
-	TKN.SpiResource -> HplRF230C.SpiResource;
+	// TKN.SpiResource -> HplRF230C.SpiResource;
 
-	// TKN.SpiResource -> SendResourceC.Resource[unique(RADIO_SEND_RESOURCE)];
+	TKN.SpiResource -> SendResourceC.Resource[unique(RADIO_SEND_RESOURCE)];
 	
 	Random = TKN;
 	ReliableWait = TKN;
@@ -141,10 +141,10 @@ implementation
 
 // -------- Driver
 
-	components RF230DriverHwAckC as RadioDriverLayerC;
-	PacketAcknowledgements = RadioDriverLayerC;
-	RadioDriverLayerC.IeeePacketLayer -> IPacketLayerC;
-	RadioDriverLayerC.AckReceivedFlag -> MetadataFlagsLayerC.PacketFlag[unique(UQ_METADATA_FLAGS)];
+	components RF230DriverLayerC as RadioDriverLayerC;
+	// PacketAcknowledgements = RadioDriverLayerC;
+	// RadioDriverLayerC.IeeePacketLayer -> IPacketLayerC;
+	// RadioDriverLayerC.AckReceivedFlag -> MetadataFlagsLayerC.PacketFlag[unique(UQ_METADATA_FLAGS)];
 
 	RadioDriverLayerC.Config -> RadioP;
 	RadioDriverLayerC.PacketTimeStamp -> TimeStampingLayerC;

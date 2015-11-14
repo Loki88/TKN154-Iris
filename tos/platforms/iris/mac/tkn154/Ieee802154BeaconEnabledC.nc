@@ -122,6 +122,15 @@ implementation
              new Timer62500C() as  MACTimer4,
              new Timer62500C() as  MACTimer5;
 
+  components TKN154RadioC;
+
+  TKN154RadioC.PIBUpdate[IEEE154_macShortAddress] -> MAC.PIBUpdate[IEEE154_macShortAddress];
+  TKN154RadioC.PIBUpdate[IEEE154_macPANId] -> MAC.PIBUpdate[IEEE154_macPANId];
+  TKN154RadioC.PIBUpdate[IEEE154_phyCurrentChannel] -> MAC.PIBUpdate[IEEE154_phyCurrentChannel];
+  TKN154RadioC.PIBUpdate[IEEE154_phyTransmitPower] -> MAC.PIBUpdate[IEEE154_phyTransmitPower];
+  TKN154RadioC.PIBUpdate[IEEE154_phyCCAMode] -> MAC.PIBUpdate[IEEE154_phyCCAMode];
+  TKN154RadioC.PIBUpdate[IEEE154_macPanCoordinator] -> MAC.PIBUpdate[IEEE154_macPanCoordinator];
+
   MAC.Alarm1 -> MACAlarm1;
   MAC.Alarm2 -> MACAlarm2;
   MAC.Alarm3 -> MACAlarm3;

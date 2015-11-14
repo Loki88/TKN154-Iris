@@ -637,6 +637,8 @@ implementation
 			getHeader(rxMsg)->length = length;
 			crc = 0;
 
+printf("RadioReceive -> length: %d - ", length);
+
 			// we do not store the CRC field
 			length -= 2;
 
@@ -648,16 +650,17 @@ implementation
 
 			do {
 				crc = RF230_CRCBYTE_COMMAND(crc, *(data++) = call FastSpiByte.splitReadWrite(0));
+printf("%02x ", *(data-1));
 			}
 			while( --read != 0  );
 
 			if( signal RadioReceive.header(rxMsg) )
 			{
-				printf("NEL DRIVER\r\n");
 				while( length-- != 0 ){
 					crc = RF230_CRCBYTE_COMMAND(crc, *(data++) = call FastSpiByte.splitReadWrite(0));
+printf("%02x ", *(data-1));
 				}
-
+printf("\r\n");
 				crc = RF230_CRCBYTE_COMMAND(crc, call FastSpiByte.splitReadWrite(0));
 				crc = RF230_CRCBYTE_COMMAND(crc, call FastSpiByte.splitReadWrite(0));
 
@@ -674,8 +677,6 @@ implementation
 
 		call SELN.set();
 		state = STATE_RX_ON;
-
-		printf("STATE_RX_ON IN DRIVER\r\n");
 
 #ifdef RADIO_DEBUG_MESSAGES
 		if( call DiagMsg.record() )
@@ -1081,6 +1082,8 @@ implementation
 		length = (call PacketTransmitPower.isSet(msg) ?
 			call PacketTransmitPower.get(msg) : RF230_DEF_RFPOWER) & RF230_TX_PWR_MASK;
 
+printf("CCATransmit -> length: %d - ", length);
+
 		if( length != txPower )
 		{
 			txPower = length;
@@ -1137,6 +1140,7 @@ implementation
 		// first upload the header to gain some time
 		do {
 			call FastSpiByte.splitReadWrite(*(data++));
+printf("%02x ", *(data-1));
 		}
 		while( --header != 0 );
 
@@ -1154,8 +1158,12 @@ implementation
 		if( timesync != 0 )
 			*(timesync_relative_t*)timesync = (*(timesync_absolute_t*)timesync) - time32;
 
-		while( length-- != 0 )
+		while( length-- != 0 ) {
 			call FastSpiByte.splitReadWrite(*(data++));
+printf("%02x ", *(data-1));
+		}
+
+printf("\r\n");
 
 		// wait for the SPI transfer to finish
 		call FastSpiByte.splitRead();

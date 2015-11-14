@@ -70,13 +70,14 @@ configuration RF230DriverHwAckC
 		interface PacketFlag as TimeSyncFlag;
 		interface PacketFlag as AckReceivedFlag;
 		interface RadioAlarm;
+		interface ActiveMessageAddress;
 	}
 }
 
 implementation
 {
 	components RF230DriverHwAckP as DriverLayerP, LocalTime62500hzC,
-		HplRF230C, BusyWaitMicroC, TaskletC, MainC, ActiveMessageAddressC;
+		HplRF230C, BusyWaitMicroC, TaskletC, MainC;
 
 	RadioState = DriverLayerP;
 	RadioSend = DriverLayerP;
@@ -112,6 +113,8 @@ implementation
 	// Alarm = Alarm62500hz32C;
 	RadioAlarm = DriverLayerP.RadioAlarm;
 
+	ActiveMessageAddress = DriverLayerP.ActiveMessageAddress;
+
 	DriverLayerP.SELN -> HplRF230C.SELN;
 	DriverLayerP.SpiResource -> HplRF230C.SpiResource;
 	DriverLayerP.FastSpiByte -> HplRF230C;
@@ -134,7 +137,7 @@ implementation
 	RealMainP.PlatformInit -> DriverLayerP.PlatformInit;
 
 	AckReceivedFlag = DriverLayerP.AckReceivedFlag;
-	DriverLayerP.ActiveMessageAddress -> ActiveMessageAddressC;
+	// DriverLayerP.ActiveMessageAddress -> ActiveMessageAddressC;
 	PacketAcknowledgements = DriverLayerP;
 	
 }

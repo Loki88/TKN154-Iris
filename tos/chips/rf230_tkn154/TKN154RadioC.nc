@@ -18,7 +18,7 @@ configuration TKN154RadioC
 		// interface Alarm<TRadio, tsize_radio> as Alarm1;
 
 	} uses {
-
+		interface Notify<const void*> as PIBUpdate[uint8_t attributeID];
 		interface Resource as SpiResource;
 
 		interface Random;
@@ -30,8 +30,8 @@ configuration TKN154RadioC
 
 } implementation {
 
-	components TKN154RadioP as TknP, RF230DriverHwAckC as Driver, RF230RadioC as Radio,
-		SerialPrintfC;
+	components TKN154RadioP as TknP, RF230DriverLayerC as Driver, RF230RadioC as Radio, 
+			ActiveMessageAddressC, SerialPrintfC;
 
 	SplitControl = TknP;
 	RadioOff = TknP;
@@ -41,16 +41,20 @@ configuration TKN154RadioC
 	SlottedCsmaCa = TknP;
 	EnergyDetection = TknP;
 	RadioPromiscuousMode = TknP;
+	PIBUpdate = TknP;
+
+	// Driver.ActiveMessageAddress -> ActiveMessageAddressC;
+	TknP.ActiveMessageAddress -> ActiveMessageAddressC;
 
 	TknP.RadioState -> Driver;
 	TknP.RadioSend -> Driver;
 	TknP.RadioReceive -> Driver;
 	// TknP.RadioCCA -> Driver;
-	TknP.RadioSendExtd -> Driver;
+	// TknP.RadioSendExtd -> Driver;
 	TknP.RadioED -> Driver;
 	TknP.RadioPacket -> Driver;
 	TknP.LocalTime -> Driver;
-
+	TknP.RadioSendCCA -> Driver;
 
 	SpiResource = TknP.SpiResource;
 	Random = TknP.Random;
