@@ -103,7 +103,9 @@ implementation
 	// TKN.SpiResource -> HplRF230C.SpiResource;
 
 	TKN.SpiResource -> SendResourceC.Resource[unique(RADIO_SEND_RESOURCE)];
-	
+	TKN.RF230DriverConfig -> RadioP;
+
+
 	Random = TKN;
 	ReliableWait = TKN;
 	TimeCalc = TKN;

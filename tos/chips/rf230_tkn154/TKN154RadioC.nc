@@ -25,7 +25,7 @@ configuration TKN154RadioC
 	    interface ReliableWait;
 	    interface TimeCalc;
 	    interface FrameUtility;
-
+	    interface RF230DriverConfig;
 	}
 
 } implementation {
@@ -42,6 +42,8 @@ configuration TKN154RadioC
 	EnergyDetection = TknP;
 	RadioPromiscuousMode = TknP;
 	PIBUpdate = TknP;
+
+	RF230DriverConfig = TknP.RF230DriverConfig;
 
 	// Driver.ActiveMessageAddress -> ActiveMessageAddressC;
 	TknP.ActiveMessageAddress -> ActiveMessageAddressC;
