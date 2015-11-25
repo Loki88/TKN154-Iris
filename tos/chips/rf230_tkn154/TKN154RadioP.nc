@@ -4,9 +4,7 @@
 #endif
 
 #include <Tasklet.h>
-#ifdef rf230_tkn_debug
 #include "printf.h"
-#endif
 #include "TKN154_MAC.h"
 
 
@@ -72,19 +70,23 @@ module TKN154RadioP {
 
 		// RadioRx
 		S_RESERVE_RX, // command enableRx received
+		S_FRAME_RX,
 		S_RECEIVING, // enabling reception
 
 		// RadioTx
 		S_RESERVE_TX, // waiting resource
+		S_RADIO_ON_TX, // radio is in state ON for transmitting
 		S_TRANSMITTING, // waiting to transmit
 
 		// UnslottedCsmaCa
 		S_TX_UNSLOTTED_CSMA, // waiting resource
+		S_RADIO_ON_UNSL_TX,
 		S_TXING_UNSLOTTED, // waiting backoff to transmit
 		S_TX_ACTIVE_UNSLOTTED_CSMA, // transmitting
 
 		// SlottedCsmaCa
 		S_TX_SLOTTED_CSMA, // waiting resource
+		S_RADIO_ON_SLOT_TX,
 		S_TXING_SLOTTED, // waiting backoff to transmit
 		S_TX_ACTIVE_SLOTTED_CSMA, // transmitting
 
@@ -96,10 +98,9 @@ module TKN154RadioP {
 // #define RX_BUFF_SIZE 4
 
 	norace m_state_t m_state = S_STOPPED;
-	norace message_t m_ieeetxframe;
 	norace ieee154_txframe_t *m_frame;
-	norace message_t *m_rxframe = (message_t*) &m_ieeetxframe;
-	norace message_t *m_txframe = (message_t*) &m_ieeetxframe;
+	norace message_t m_rxframe;
+	// norace message_t *m_newRxFrame = &m_rxframe;
 	norace error_t m_txResult;
 	norace error_t m_edStatus;
 	norace bool m_ackFramePending;
@@ -143,6 +144,7 @@ module TKN154RadioP {
 	void radioTxTransmit();
 	void unslottedTxTransmit();
 	void slottedTxTransmit();
+	void startSlotted();
 
 	//----- DEBUG
 	void printState();
@@ -151,6 +153,35 @@ module TKN154RadioP {
 
 	/* UTILITY */
 
+	inline bool isSpiAcquired() {
+		return call SpiResource.isOwner() || (call SpiResource.immediateRequest() == SUCCESS);
+	}
+
+	/* SIGNAL TASKS */
+
+	task void startDone(){
+
+	}
+
+	task void stopDone(){
+
+	}
+
+	task void txDone(){
+
+	}
+
+	task void txSlotDone(){
+
+	}
+
+	task void txUnslDone(){
+
+	}
+
+	task void rxEnableDone(){
+
+	}
 
 	task void configSyncTask() {
 		if (call SpiResource.immediateRequest() == SUCCESS) {
@@ -180,77 +211,6 @@ module TKN154RadioP {
 		return (res * IEEE154_aUnitBackoffPeriod);
 	}
 
-	void setTxPacket(ieee154_txframe_t *msg) {
-		uint8_t i, j;
-		uint8_t hlen = call RadioPacket.headerLength((message_t*) msg);
-
-		call RadioPacket.setPayloadLength(m_txframe, ((ieee154_txframe_t*)msg)->payloadLen+((ieee154_txframe_t*)msg)->headerLen);
-		
-#ifdef rf230_tkn_debug
-		printf(" --------- MESSAGE len: %d = %d + %d----------- \r\n", call RadioPacket.payloadLength(m_txframe),
-			((ieee154_txframe_t*)msg)->headerLen,((ieee154_txframe_t*)msg)->payloadLen);
-#endif
-
-		for(i=0; i<((ieee154_txframe_t*)msg)->headerLen; i++){
-			*((uint8_t*)m_txframe + hlen + i) = MHR(msg)[i];
-#ifdef rf230_tkn_debug
-			printf("%02x ", MHR(msg)[i]);
-#endif
-		}
-
-		for(j=0; j<((ieee154_txframe_t*)msg)->payloadLen; j++) {
-			*((uint8_t*)m_txframe + hlen + i + j) = *(((ieee154_txframe_t*)msg)->payload + j);
-#ifdef rf230_tkn_debug	
-			printf("%02x ", *(((ieee154_txframe_t*)msg)->payload + j));
-#endif
-		}
-#ifdef rf230_tkn_debug
-		printf("\r\n");
-#endif
-	}
-
-	void setRxPacket(message_t *msg) {
-		uint8_t len, i;
-		uint8_t hlen = call RadioPacket.headerLength(msg);
-
-		((ieee154_header_t*)m_rxframe->header)->length = *((uint8_t*)msg + hlen - 1) - 2; // remove 2 byte of CRC from total length
-
-#ifdef rf230_tkn_debug
-		printf("setRxPacket -> length: %d\r\n ", ((ieee154_header_t*)m_rxframe->header)->length);
-#endif
-
-		call FrameUtility.getMHRLength(*((uint8_t*)msg+hlen), *((uint8_t*)msg+hlen+1), &len);
-
-#ifdef rf230_tkn_debug
-		printf("MHR LEN -> %d\r\nFRAME - ", len);
-#endif
-
-		for(i=0; i<len; i++){
-			((ieee154_header_t*)m_rxframe->header)->mhr[i] = *((uint8_t*)msg+hlen+i);
-#ifdef rf230_tkn_debug
-			printf("%02x ", ((ieee154_header_t*)m_rxframe->header)->mhr[i]);
-#endif
-		}
-		for(i=0; i<((ieee154_header_t*)m_rxframe->header)->length-len; i++) {
-			m_rxframe->data[i] = *((uint8_t*)msg+hlen+len+i);
-#ifdef rf230_tkn_debug	
-			printf("%02x ", m_rxframe->data[i]);
-#endif
-		}
-
-#ifdef rf230_tkn_debug
-		printf("\r\n");
-#endif
-
-		((ieee154_metadata_t*) m_rxframe->metadata) -> timestamp = ((rf230packet_metadata_t*)msg->metadata)->timestamp.timestamp;
-		((ieee154_metadata_t*) m_rxframe->metadata) -> rssi = ((rf230packet_metadata_t*)msg->metadata)-> rf230.rssi;
-		((ieee154_metadata_t*) m_rxframe->metadata) -> linkQuality = ((rf230packet_metadata_t*)msg->metadata)-> rf230.lqi;
-#ifdef rf230_tkn_debug
-		printf("Timestamp: %lu\r\nRSSI: %d\r\nLink Quality: %d\r\n", ((ieee154_metadata_t*) m_rxframe->metadata) -> timestamp,
-			((ieee154_metadata_t*) m_rxframe->metadata) -> rssi, ((ieee154_metadata_t*) m_rxframe->metadata) -> linkQuality);
-#endif
-	}
-
 	/***** TKN154 INFERFACES *****/
 
 	// TODO: adjust Init to allocate RAM for m_txframe and m_rxframe
@@ -262,20 +222,11 @@ module TKN154RadioP {
 	}
 
 	event void PIBUpdate.notify[uint8_t PIBAttribute](const void* PIBAttributeValue) {
-#ifdef rf230_tkn_debug
-		printf("PIBUpdate\r\n");
-#endif
 		switch (PIBAttribute) {
 			case IEEE154_macShortAddress:
-#ifdef rf230_tkn_debug	
-				printf("\tIEEE154_macShortAddress \r\n");
-#endif
 				// call ActiveMessageAddress.setAddress(call ActiveMessageAddress.amGroup(), *((am_addr_t*) PIBAttributeValue));
 				break;
 			case IEEE154_macPANId:
-#ifdef rf230_tkn_debug	
-				printf("\tIEEE154_macPANId\r\n");
-#endif
 				// call ActiveMessageAddress.setAddress(*((am_group_t*) PIBAttributeValue), call ActiveMessageAddress.amAddress());
 				break;
 			case IEEE154_phyCurrentChannel:
@@ -284,37 +235,29 @@ module TKN154RadioP {
 			// case IEEE154_macPanCoordinator:
 			// 	// call CC2420Config.setPanCoordinator(*((ieee154_macPanCoordinator_t*) PIBAttributeValue));
 			// 	break;
-			// case IEEE154_phyTransmitPower:
+			case IEEE154_phyTransmitPower:
 			// 	atomic{
 			// 		 lower 6 bits are twos-complement in dBm (range -32 to +31 dBm) 
-			// 		m_txPower = (*((ieee154_phyTransmitPower_t*) PIBAttributeValue)) & 0x3F;
+					m_txPower = (*((ieee154_phyTransmitPower_t*) PIBAttributeValue)) & 0x3F;
 			// 		if (m_txPower & 0x20)
 			// 		m_txPower |= 0xC0; /* make it negative, to be interpreted as int8_t */
 			// 	}
-			// 	break;
-			// case IEEE154_phyCCAMode:
+				break;
+			case IEEE154_phyCCAMode:
 			// 	// call CC2420Config.setCCAMode(*((ieee154_phyCCAMode_t*) PIBAttributeValue));
-			// 	break;
+				break;
 		}
 	}
 
 	/* RadioPromiscuousMode */
 
 	command void RadioPromiscuousMode.set( bool val ) {
-#ifdef rf230_tkn_debug
-		printf("RadioPromiscuousMode.set()\r\n"); printfflush();
-#endif
 		// call CC2420Config.setPromiscuousMode(val);
 	}
 
 	/* SplitControl */
 
 	command error_t SplitControl.start() {
-#ifdef rf230_tkn_debug
-		printf("TKN154RadioP -> SplitControl.start()\r\n");
-		printState(); printfflush();
-#endif
-		
 		atomic {
 			if (m_state == S_RADIO_OFF)
 				return EALREADY;
@@ -329,17 +272,12 @@ module TKN154RadioP {
 	}
 
 	command error_t SplitControl.stop() {
-#ifdef rf230_tkn_debug
-		printf("TKN154RadioP -> SplitControl.stop()\r\n");
-#endif
-		// printState(); printfflush();
 		atomic {
 			if (m_state == S_STOPPED)
 	        	return EALREADY;
         	else if (m_state != S_RADIO_OFF)
 	        	return FAIL;
 
-	        // m_state_prev = m_state;
 	    	m_state = S_STOPPING;
 		}
 
@@ -351,7 +289,7 @@ module TKN154RadioP {
 
 	async event void RadioState.done() {	// invoked once the state of the radio driver has changed
 #ifdef rf230_tkn_debug
-		printf("TKN154RadioP -> RadioState.done()\r\nChannel = %d\r\n", call RadioState.getChannel());
+		printf("TKN154RadioP -> RadioState.done()\r\n");
 		printState(); printfflush();
 #endif
 
@@ -359,46 +297,49 @@ module TKN154RadioP {
 			switch(m_state) {
 				case S_STOPPING: // signal SplitControl.stopDone()
 					m_state = S_STOPPED;
-#ifdef rf230_tkn_debug
-					printf("signal stopDone()\r\n");
-#endif
 					signal SplitControl.stopDone(SUCCESS);
 					break;
 				case S_STARTING: // signal SplitControl.startDone()
 					m_state = S_RADIO_OFF;
-#ifdef rf230_tkn_debug
-					printf("signal startDone()\r\n");
-#endif
 					signal SplitControl.startDone(SUCCESS);
 					break;
 				case S_OFF_WAITING: // signal RadioOff.offDone()
 					m_state = S_RADIO_OFF;
-#ifdef rf230_tkn_debug	
-					printf("signals RadioOff.offDone()\r\n");
-#endif
 					call SpiResource.release();
 					signal RadioOff.offDone();
 					break;
+				case S_RESERVE_RX:
+					m_state = S_RECEIVING;
+					call SpiResource.release();
+					signal RadioRx.enableRxDone();
+					break;
+				case S_RESERVE_TX:
+					m_state = S_RADIO_ON_TX;
+					break;
+				case S_TX_UNSLOTTED_CSMA:
+					m_state = S_RADIO_ON_UNSL_TX;
+					break;
+				case S_TX_SLOTTED_CSMA:
+					m_state = S_RADIO_ON_SLOT_TX;
+					break;
+				case S_TXING_SLOTTED:
+					nextIterationSlotted();
+					break;
 				case S_TRANSMITTING:
+					m_state = S_RADIO_OFF;
 					call SpiResource.release();
 					signal RadioTx.transmitDone(m_frame, m_txResult);
-#ifdef rf230_tkn_debug	
-					printf("RadioTx.transmitDone\r\n");
-#endif
 					break;
 				case S_TX_ACTIVE_UNSLOTTED_CSMA:
+					m_state = S_RADIO_OFF;
 					call SpiResource.release();
 					signal UnslottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, m_txResult);
-#ifdef rf230_tkn_debug	
-					printf("UnslottedCsmaCa.transmitDone\r\n");
-#endif
 					break;
 				case S_TX_ACTIVE_SLOTTED_CSMA:
+					m_state = S_RADIO_OFF;
 					call SpiResource.release();
 					signal SlottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, m_remainingBackoff, m_txResult);
-#ifdef rf230_tkn_debug	
-					printf("SlottedCsmaCa.transmitDone\r\n");
-#endif
+					break;
 				default:
 					return;
 			}
@@ -408,10 +349,7 @@ module TKN154RadioP {
 	//--------------- RadioOff Management
 
 	async command error_t RadioOff.off() {
-#ifdef rf230_tkn_debug	
-		printf("TKN154RadioP -> RadioOff.off()\r\n");
-		printState(); printfflush();
-#endif
+
 		atomic {
 			if (m_state == S_RADIO_OFF){
 				return EALREADY;
@@ -422,7 +360,7 @@ module TKN154RadioP {
 			m_state = S_OFF_PENDING;
 		}
 
-		if(call SpiResource.immediateRequest() == SUCCESS)
+		if(isSpiAcquired())
 			offPending();
 		else
 			call SpiResource.request();
@@ -431,36 +369,27 @@ module TKN154RadioP {
 
 	inline void offPending() { // executed in S_OFF_PENDING
 		error_t result;
-#ifdef rf230_tkn_debug	
-		printf("TKN154RadioP -> offPending()\r\n");
-#endif
-		// printState(); printfflush();
+
 		atomic {
 			m_state = S_OFF_WAITING;	
 		}
 
-		result = call RadioState.turnOff();
+		result = call RadioState.standby();
 		if(result == EALREADY){ // signal completion in RadioState.done()
 			signal RadioState.done();
+		} else if (result != SUCCESS) {
+			printf ("offPending -> RESULT ERROR\r\n");
 		}
 	}
 
 	async command bool RadioOff.isOff() {
-#ifdef rf230_tkn_debug	
-		printf("TKN154RadioP -> RadioState.isOff()\r\n");
-		printState(); printfflush();
-#endif
 		return m_state == S_RADIO_OFF;
 	}
 
 	//--------------- RadioRx Management
 
 	async command error_t RadioRx.enableRx(uint32_t t0, uint32_t dt) {
-		error_t result = SUCCESS;
-#ifdef rf230_tkn_debug	
-		printf("TKN154RadioP -> RadioRx.enableRx()\r\n");
-#endif
-		// printState(); printfflush();
+		printf("RadioRx.enableRx %lu, %lu\r\n", t0, dt);
 		atomic {
 			if(m_state == S_RECEIVING)
 				return EALREADY;
@@ -473,7 +402,7 @@ module TKN154RadioP {
 		m_t0 = t0;
 		m_dt = dt;
 			
-		if (call SpiResource.immediateRequest() == SUCCESS)
+		if (isSpiAcquired())
 			startReceiving();
 		else
 			call SpiResource.request(); // continue in startReceiving()
@@ -493,7 +422,7 @@ module TKN154RadioP {
 		if (result == EALREADY){
 			call SpiResource.release();
 			signal RadioRx.enableRxDone();
-		} else {
+		} else if (result != SUCCESS) {
 			atomic{
 				m_state = S_RADIO_OFF;
 			}
@@ -501,19 +430,16 @@ module TKN154RadioP {
 	}
 
 	async event bool RadioReceive.header(message_t *msg) {
-		if(m_state == S_RECEIVING || m_state == S_RESERVE_RX)
+		printf("RadioReceive.header\r\n");
+		printState();printfflush();
+		if(call RadioRx.isReceiving()) // rx is blocked if not in receiving state
 			return TRUE;
 		else
 			return FALSE;
 	}
 
 	async event message_t* RadioReceive.receive(message_t *msg) {
-
-		setRxPacket(msg);
-
-		signal RadioRx.received((message_t*) m_rxframe);
-
-		return msg;
+		return signal RadioRx.received(msg);;
 	}
 
 	async command bool RadioRx.isReceiving() {
@@ -523,11 +449,7 @@ module TKN154RadioP {
 	//--------------- RadioTx
 
 	async command error_t RadioTx.transmit(ieee154_txframe_t *frame, uint32_t t0, uint32_t dt) {
-		error_t result;
-#ifdef rf230_tkn_debug
-		printf("TKN154RadioP -> RadioTx.transmit()\r\n");
-		printfflush();
-#endif
+		printf("RadioTx.transmit -> %lu + %lu\r\n", t0, dt);
 
 		if( frame == NULL || frame->header == NULL || ((frame->payload == NULL) && (frame->payloadLen != 0)) ||
 			frame->metadata == NULL || (frame->headerLen + frame->payloadLen + 2) > IEEE154_aMaxPHYPacketSize )
@@ -543,10 +465,8 @@ module TKN154RadioP {
 		m_frame = frame;
 		m_t0 = t0;
 		m_dt = dt;
-
-		setTxPacket(frame);
 	
-		if (call SpiResource.immediateRequest() == SUCCESS)
+		if (isSpiAcquired())
 			startTransmitting();
 		else
 			call SpiResource.request();
@@ -554,12 +474,23 @@ module TKN154RadioP {
 		return SUCCESS;
 	}
 
-	inline void startTransmitting() {
-		
-		if( call TimeCalc.hasExpired(m_t0, m_dt))
+	inline void waitTx(){
+		if(call TimeCalc.hasExpired(m_t0, m_dt))
 			signal ReliableWait.waitTxDone();
 		else
 			call ReliableWait.waitTx(m_t0, m_dt);
+	}
+
+	inline void startTransmitting() {
+		error_t result = call RadioState.turnOn();
+		if(result == EALREADY) {
+			waitTx();
+		} else if (result != SUCCESS){
+			call SpiResource.release();
+			atomic{
+				m_state = S_RADIO_OFF;
+			}
+		}
 	}
 
 	async event void ReliableWait.waitTxDone() {
@@ -568,60 +499,50 @@ module TKN154RadioP {
 			m_state = S_TRANSMITTING;
 		}
 
-		result = call RadioSendCCA.send(m_txframe, FALSE);
+		result = call RadioSendCCA.send((message_t*) m_frame, FALSE);
 		if (result != SUCCESS) {
 			signal RadioSend.sendDone(result);
-		}
-	}
-
-	inline void sendDoneSync(){
-		error_t result;
-		if(m_sync) {
-			switch(m_state){
-				case S_TRANSMITTING:
-				case S_TX_ACTIVE_UNSLOTTED_CSMA:
-				case S_TX_ACTIVE_SLOTTED_CSMA:
-					result = call RadioState.standby();
-					if(result == EALREADY)
-						signal RadioState.done();
-					break;
-				default: ASSERT(0); return;
-			}
-			m_sync = FALSE;
-		} else {
-			m_sync = TRUE;
 		}
 	}
 
 	// sendDone and ready are signaled for both RadioSend and RadioSendExtd
 	async event void RadioSend.sendDone(error_t error) {
 		error_t result;
-		m_state_t state;
-
 		atomic{
 			if (error == SUCCESS)
 				m_txResult = SUCCESS;
-			else if (error == EBUSY)
-				m_txResult = FAIL;
 			else
 				m_txResult = ENOACK;
 
-			sendDoneSync();
-		}
+
+			switch(m_state){
+				case S_TRANSMITTING:
+				case S_TX_ACTIVE_UNSLOTTED_CSMA:
+				case S_TX_ACTIVE_SLOTTED_CSMA:
+					result = call RadioState.standby();
+					printf("RadioSend.sendDone -> result %s\r\n", getErrorStr(result));
+					break;
+				default: 
+					return;
+			}
+		}	
 	}
 
 	async event void RadioSend.ready() {
-#ifdef rf230_tkn_debug
-		printf("TKN154RadioP -> RadioSend.ready()\r\n");
-		printState(); printfflush();
-#endif
-		atomic {
-			if(m_state == S_RECEIVING){ // signaled also during reception because when radio is on it is also ready to send
-				call SpiResource.release();
-				signal RadioRx.enableRxDone();
+		atomic{
+			switch(m_state){
+				case S_RADIO_ON_TX:
+					waitTx();
+					break;
+				case S_RADIO_ON_UNSL_TX:
+					nextIterationUnslotted();
+					break;
+				case S_RADIO_ON_SLOT_TX:
+					nextIterationSlotted();
+					break;
+				default: 
+					return;
 			}
-			else
-				sendDoneSync();
 		}
 	}
 
@@ -647,7 +568,6 @@ module TKN154RadioP {
 		m_frame = frame;
 	    m_csma = csma;
 	    m_ackFramePending = (frame->header->mhr[MHR_INDEX_FC1] & FC1_ACK_REQUEST) ? TRUE : FALSE;	    
-	    setTxPacket(frame);
 	    
 	    if (call SpiResource.immediateRequest() == SUCCESS)
 			nextIterationUnslotted();
@@ -679,7 +599,7 @@ module TKN154RadioP {
 			m_state = S_TX_ACTIVE_UNSLOTTED_CSMA;
 		}
 
-		result = call RadioSend.send(m_txframe);
+		result = call RadioSendCCA.send((message_t*) m_frame, TRUE);
 		ASSERT(result == SUCCESS);
 	}
 
@@ -689,8 +609,7 @@ module TKN154RadioP {
       	uint32_t slot0Time, uint32_t dtMax, bool resume, uint16_t remainingBackoff){
 
 #ifdef rf230_tkn_debug
-		printf("TKN154RadioP -> SlottedCsmaCa.transmit()\r\n", 
-			frame, csma, slot0Time, dtMax, resume, remainingBackoff);
+		printf("TKN154RadioP -> SlottedCsmaCa.transmit()\r\n");
 #endif
 		
 		if( frame == NULL || frame->header == NULL || 
@@ -706,9 +625,6 @@ module TKN154RadioP {
 		}
 
 		m_frame = frame;
-		
-	    setTxPacket(frame);
-
 		m_csma = csma;
 		m_t0 = slot0Time;
 		m_dt = dtMax;
@@ -716,12 +632,33 @@ module TKN154RadioP {
 		m_remainingBackoff = remainingBackoff;
 		m_ackFramePending = (frame->header->mhr[MHR_INDEX_FC1] & FC1_ACK_REQUEST) ? TRUE : FALSE;
 
-		if (call SpiResource.immediateRequest() == SUCCESS)
-			nextIterationSlotted();
+		if (isSpiAcquired())
+			startSlotted();
 		else
 			call SpiResource.request();
 		
 		return SUCCESS;
+	}
+
+	inline void startSlotted() {
+		error_t result;
+#ifdef rf230_tkn_debug
+		printf("startSlotted\r\n");
+#endif
+		atomic {
+			m_state = S_TXING_SLOTTED;
+		}
+
+		result = call RadioState.turnOn();
+		if(result == EALREADY) {
+			nextIterationSlotted();
+		} else if (result != SUCCESS){
+			printf ("offPending -> RESULT ERROR\r\n");
+			call SpiResource.release();
+			atomic{
+				m_state = S_RADIO_OFF;
+			}
+		}
 	}
 
 	inline void nextIterationSlotted() {
@@ -752,15 +689,16 @@ module TKN154RadioP {
 				csma = m_csma;
 			} else {
 				/* backoff now */
-				m_state = S_TXING_SLOTTED;
 				call ReliableWait.waitBackoff(backoff);  /* will continue in waitBackoffDoneSlottedCsma()  */
 			}
 		}
 		if (frame != NULL) { /* frame didn't fit in the remaining CAP */
+			m_txResult = ERETRY;
+			m_ackFramePending = FALSE;
 			call RadioState.standby();
-			call SpiResource.release();
-			m_state = S_RADIO_OFF;
-			signal SlottedCsmaCa.transmitDone(frame, csma, FALSE, backoff, ERETRY);
+			// call SpiResource.release();
+			// m_state = S_RADIO_OFF;
+			// signal SlottedCsmaCa.transmitDone(frame, csma, FALSE, backoff, ERETRY);
 		}
 	}
 
@@ -782,7 +720,6 @@ module TKN154RadioP {
 
 
 	inline void txSlotted() {
-		int8_t dummy;
 		bool ccaFailure = FALSE;
 		error_t result = FAIL;
 		ieee154_txframe_t *frame = NULL;
@@ -795,7 +732,7 @@ module TKN154RadioP {
 		atomic {
 			m_state = S_TX_ACTIVE_SLOTTED_CSMA;
 
-			if (call RadioSendCCA.send(m_txframe, TRUE) == SUCCESS) {
+			if (call RadioSendCCA.send((message_t*) m_frame, TRUE) == SUCCESS) {
 				// ack logic is handled inside the driver
 				return;
 			} else
@@ -826,10 +763,8 @@ module TKN154RadioP {
 		}
 
 		if (frame != NULL) {
-
-			call SpiResource.release();
-			m_state = S_RADIO_OFF;
-			signal SlottedCsmaCa.transmitDone(frame, csma, FALSE, 0, result);
+			m_txResult = result;
+			call RadioState.standby();
 		}
 	}
 
@@ -837,7 +772,7 @@ module TKN154RadioP {
 
 	command error_t EnergyDetection.start(uint32_t duration) {
 #ifdef rf230_tkn_debug
-		printf("TKN154RadioP -> EnergyDetection.start(%zu)\r\n", duration);
+		printf("TKN154RadioP -> EnergyDetection.start(%lu)\r\n", duration);
 #endif
 
 		atomic {
@@ -895,7 +830,7 @@ module TKN154RadioP {
 			case S_TX_ACTIVE_UNSLOTTED_CSMA:		ASSERT(0); break;
 
 			// SlottedCsmaCa
-			case S_TX_SLOTTED_CSMA:					nextIterationSlotted(); break;
+			case S_TX_SLOTTED_CSMA:					startSlotted(); break;
 			case S_TXING_SLOTTED:					ASSERT(0); break;
 			case S_TX_ACTIVE_SLOTTED_CSMA:			ASSERT(0); break;
 
@@ -978,20 +913,24 @@ module TKN154RadioP {
 
 			// RadioRx
 			case S_RESERVE_RX:						printf("S_RESERVE_RX\r\n"); break;
+			case S_FRAME_RX:						printf("S_FRAME_RX\r\n"); break;
 			case S_RECEIVING:						printf("S_RECEIVING\r\n"); break;
 
 			// RadioTx
 			case S_RESERVE_TX:						printf("S_RESERVE_TX\r\n"); break;
+			case S_RADIO_ON_TX:						printf("S_RADIO_ON_TX\r\n"); break;
 			case S_TRANSMITTING:					printf("S_TRANSMITTING\r\n"); break;
 
 			// UnslottedCsmaCa
 			case S_TX_UNSLOTTED_CSMA:				printf("S_TX_UNSLOTTED_CSMA\r\n"); break;
 			case S_TXING_UNSLOTTED:					printf("S_TXING_UNSLOTTED\r\n"); break;
+			case S_RADIO_ON_UNSL_TX:				printf("S_RADIO_ON_UNSL_TX\r\n"); break;
 			case S_TX_ACTIVE_UNSLOTTED_CSMA:		printf("S_TX_ACTIVE_UNSLOTTED_CSMA\r\n"); break;
 
 			// SlottedCsmaCa
 			case S_TX_SLOTTED_CSMA:					printf("S_TX_SLOTTED_CSMA\r\n"); break;
 			case S_TXING_SLOTTED:					printf("S_TXING_SLOTTED\r\n"); break;
+			case S_RADIO_ON_SLOT_TX:				printf("S_RADIO_ON_SLOT_TX\r\n"); break;
 			case S_TX_ACTIVE_SLOTTED_CSMA:			printf("S_TX_ACTIVE_SLOTTED_CSMA\r\n"); break;
 
 			// Energy Detection

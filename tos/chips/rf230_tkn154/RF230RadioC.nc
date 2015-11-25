@@ -33,6 +33,7 @@
  */
 
 #include <RadioConfig.h>
+#include "printf.h"
 
 
 configuration RF230RadioC
@@ -67,8 +68,12 @@ configuration RF230RadioC
 		
 		interface Random;
 	    interface ReliableWait;
+	    interface CaptureTime;
 	    interface TimeCalc;
 	    interface FrameUtility;
+
+	    interface FrameUtility as DriverFrame;
+	    interface IEEE154Frame as Frame;
 
 	}
 }
@@ -160,4 +165,8 @@ implementation
 	RadioDriverLayerC.RSSIFlag -> MetadataFlagsLayerC.PacketFlag[unique(UQ_METADATA_FLAGS)];
 	RadioDriverLayerC.TimeSyncFlag -> MetadataFlagsLayerC.PacketFlag[unique(UQ_METADATA_FLAGS)];
 	RadioDriverLayerC.RadioAlarm -> RadioAlarmC.RadioAlarm[unique(UQ_RADIO_ALARM)];
+
+	DriverFrame = RadioDriverLayerC;
+	Frame = RadioDriverLayerC;
+	CaptureTime = RadioDriverLayerC;
 }

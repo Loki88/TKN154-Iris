@@ -95,12 +95,14 @@ implementation
              LocalTime62500hzC, TKN154TimingP;
 
   PHY.ReliableWait -> TKN154TimingP;
+  PHY.CaptureTime -> TKN154TimingP;
   PHY.TimeCalc -> MAC;
-  // PHY.LocalTimeRadio -> LocalTime62500hzC;
+
 
   TKN154TimingP.TimeCalc -> MAC;
   TKN154TimingP.Leds -> LedsC;
   TKN154TimingP.SymbolAlarm -> TKN154TimingPAlarm;
+
 
   components new Alarm62500hz32VirtualizedC() as  MACAlarm1,
              new Alarm62500hz32VirtualizedC() as  MACAlarm2,
@@ -162,6 +164,8 @@ implementation
   MAC.RadioPromiscuousMode -> PHY.RadioPromiscuousMode;
 
   PHY.FrameUtility -> MAC;
+  PHY.DriverFrame -> MAC;
+  PHY.Frame -> MAC;
 
   components RandomC, LedsC, NoLedsC;
   MAC.Random -> RandomC;

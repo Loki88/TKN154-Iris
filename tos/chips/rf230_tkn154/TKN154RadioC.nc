@@ -26,6 +26,7 @@ configuration TKN154RadioC
 	    interface TimeCalc;
 	    interface FrameUtility;
 	    interface RF230DriverConfig;
+	    
 	}
 
 } implementation {
@@ -45,6 +46,8 @@ configuration TKN154RadioC
 
 	RF230DriverConfig = TknP.RF230DriverConfig;
 
+	
+
 	// Driver.ActiveMessageAddress -> ActiveMessageAddressC;
 	TknP.ActiveMessageAddress -> ActiveMessageAddressC;
 
@@ -61,6 +64,7 @@ configuration TKN154RadioC
 	SpiResource = TknP.SpiResource;
 	Random = TknP.Random;
 	ReliableWait = TknP.ReliableWait;
+	
 	TimeCalc = TknP.TimeCalc;
 	FrameUtility = TknP.FrameUtility;
 	

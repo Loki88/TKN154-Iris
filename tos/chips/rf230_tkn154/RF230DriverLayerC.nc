@@ -69,13 +69,17 @@ configuration RF230DriverLayerC
 		interface PacketFlag as RSSIFlag;
 		interface PacketFlag as TimeSyncFlag;
 		interface RadioAlarm;
+
+		interface FrameUtility;
+		interface IEEE154Frame as Frame;
+		interface CaptureTime;
 	}
 }
 
 implementation
 {
 	components RF230DriverLayerP as DriverLayerP, LocalTime62500hzC,
-		HplRF230C, BusyWaitMicroC, TaskletC, MainC;
+		HplRF230C, BusyWaitMicroC, TaskletC, MainC, SerialPrintfC;
 
 	RadioState = DriverLayerP;
 	RadioSend = DriverLayerP;
@@ -88,6 +92,9 @@ implementation
 	LocalTimeRadio = LocalTime62500hzC;
 
 	Config = DriverLayerP;
+
+	FrameUtility = DriverLayerP;
+	Frame = DriverLayerP;
 
 	PacketTransmitPower = DriverLayerP.PacketTransmitPower;
 	TransmitPowerFlag = DriverLayerP.TransmitPowerFlag;
@@ -129,4 +136,5 @@ implementation
 	RealMainP.PlatformInit -> DriverLayerP.PlatformInit;
 	
 	CCA = DriverLayerP;
+	CaptureTime = DriverLayerP;
 }

@@ -3,3 +3,5 @@ CFLAGS += -I$(TOSDIR)/platforms/iris/mac/tkn154 \
 	-I$(TOSDIR)/platforms/iris/mac/tkn154/timer \
 	-I$(TOSDIR)/chips/rf230_tkn154
 
+PFLAGS += -I$(TOSDIR)/lib/printf/
+
