@@ -40,6 +40,8 @@
 #include <RadioConfig.h>
 #include "printf.h"
 
+#define RF230_SLOW_SPI
+
 module RF230DriverLayerP
 {
 	provides
@@ -159,12 +161,14 @@ implementation
 	tasklet_norace error_t cca_result;
 
 	tasklet_norace message_t* rxMsg;
-	message_t rxMsgBuffer;
+	norace message_t rxMsgBuffer;
 
 	uint16_t capturedTime;	// the current time when the last interrupt has occured
 
 	tasklet_norace uint8_t rssiClear;
 	tasklet_norace uint8_t rssiBusy;
+
+	void print();
 
 /*----------------- REGISTER -----------------*/
 
@@ -631,25 +635,29 @@ printf("Message length = %d\r\n", length);
 
 		call SELN.clr();
 		call FastSpiByte.write(RF230_CMD_FRAME_READ);
+		// print();
 
 		// read the length byte
 		length = call FastSpiByte.write(0);
+
+		printf("length: %d - ", length);
 
 		// if correct length
 		if( length >= 3 && length <= call RadioPacket.maxPayloadLength() + 2 )
 		{
 			uint8_t read;
 			uint8_t* data;
-			uint8_t headerLen;
+			// ieee154_txframe_t* frame = (ieee154_txframe_t*) rxMsg;
+			uint8_t headerLen = 0;
 
 			// initiate the reading
 			call FastSpiByte.splitWrite(0);
 
 			data = (uint8_t*) rxMsg->header;
-			// data = getPayload(rxMsg);
-			*(data++) = length-2; 
-			// getHeader(rxMsg)->length = length;
+			*(data++) = length - 2;
 			crc = 0;
+
+			printf("MAC FRAME LENGTH: %d\r\n", *(data-1));
 
 			// we do not store the CRC field
 			length -= 2;
@@ -657,12 +665,15 @@ printf("Message length = %d\r\n", length);
 			read = call Config.headerPreloadLength();
 			if( length < read )
 				read = length;
-
+printf("RX - ");
 			length -= read;
+
 			do {
 				crc = RF230_CRCBYTE_COMMAND(crc, *(data++) = call FastSpiByte.splitReadWrite(0));
+printf("%02x ", *(data-1));
 			}
 			while( --read != 0  );
+
 
 			if( signal RadioReceive.header(rxMsg) )
 			{
@@ -673,10 +684,12 @@ printf("Message length = %d\r\n", length);
 
 				length -= headerLen; // payload length
 
-				while(headerLen-- != 0)
+				while(headerLen-- != 0){
 					crc = RF230_CRCBYTE_COMMAND(crc, *(data++) = call FastSpiByte.splitReadWrite(0));
+printf("%02x ", *(data-1));
+				}
 				
-printf("PAYLOAD - ");
+
 				// now we read the payload
 				data = (uint8_t*) rxMsg->data;
 				while( length-- != 0 ){
@@ -717,12 +730,15 @@ printf("\r\n"); printfflush();
 			call DiagMsg.send();
 		}
 #endif
-		
+		// print();
+
 		cmd = CMD_NONE;
 
 		// signal only if it has passed the CRC check
 		if( crc == 0 )
 			rxMsg = signal RadioReceive.receive(rxMsg);
+		else
+			printf("CRC FAILED!\r\n");
 	}
 
 /*----------------- IRQ -----------------*/
@@ -974,7 +990,7 @@ printf("\r\n"); printfflush();
 
 	async command void PacketTransmitPower.clear(message_t* msg)
 	{
-		call TransmitPowerFlag.clear(msg);
+		// call TransmitPowerFlag.clear(msg);
 	}
 
 	async command void PacketTransmitPower.set(message_t* msg, uint8_t value)
@@ -997,15 +1013,15 @@ printf("\r\n"); printfflush();
 
 	async command void PacketRSSI.clear(message_t* msg)
 	{
-		call RSSIFlag.clear(msg);
+		// call RSSIFlag.clear(msg);
 	}
 
 	async command void PacketRSSI.set(message_t* msg, uint8_t value)
 	{
 		// just to be safe if the user fails to clear the packet
-		call TransmitPowerFlag.clear(msg);
+		// call TransmitPowerFlag.clear(msg);
 
-		call RSSIFlag.set(msg);
+		// call RSSIFlag.set(msg);
 		((ieee154_metadata_t*) msg->metadata) -> rssi = value;
 	}
 
@@ -1023,7 +1039,7 @@ printf("\r\n"); printfflush();
 
 	async command void PacketTimeSyncOffset.clear(message_t* msg)
 	{
-		call TimeSyncFlag.clear(msg);
+		// call TimeSyncFlag.clear(msg);
 	}
 
 	async command void PacketTimeSyncOffset.set(message_t* msg, uint8_t value)
@@ -1097,7 +1113,6 @@ printf("\r\n"); printfflush();
     	uint16_t time;
 		uint8_t length;
 		uint8_t* data;
-		uint8_t i;
 		uint8_t header;
 		uint32_t time32;
 		void* timesync;
@@ -1161,13 +1176,12 @@ printf("\r\n"); printfflush();
 			header = length;
 
 		length -= header;
-
-		i=0;
+printf("TX - ");
 		// first upload the header to gain some time
 		do {
 			call FastSpiByte.splitReadWrite(*(data++));
-		}
-		while( --header != 0 );
+printf("%02x ", *(data-1));
+		} while( --header != 0 );
 
 		// header = ((ieee154_txframe_t*)msg->data)->headerLen - Config.headerPreloadLength();
 
@@ -1187,7 +1201,6 @@ printf("\r\n"); printfflush();
 		if( timesync != 0 )
 			*(timesync_relative_t*)timesync = (*(timesync_absolute_t*)timesync) - time32;
 
-printf("PAYLOAD -> ");
 		while( length-- != 0 ){
 			call FastSpiByte.splitReadWrite(*(data++));
 printf("%02x ", *(data-1));
@@ -1219,7 +1232,7 @@ printf("\r\n"); printfflush();
 		// call PacketTimeStamp.set(msg, time32);
 		// ((ieee154_txframe_t*) rxMsg) -> metadata -> timestamp = time32;
 		// ((ieee154_metadata_t*) rxMsg -> metadata)->timestamp = time32;
-		printf("Time32 %lu - FCF %02x %02x\r\n", time32, MHR(msg)[0], MHR(msg)[1]);
+		// printf("Time32 %lu - FCF %02x %02x\r\n", time32, MHR(frame)[0], MHR(frame)[1]);
 		((ieee154_txframe_t*) msg)->metadata->timestamp = call CaptureTime.getTimestamp(time32);
 
 #ifdef RADIO_DEBUG_MESSAGES
@@ -1256,5 +1269,14 @@ printf("\r\n"); printfflush();
     	} else { // TURN ON THE RADIO
 
     	}
+    }
+
+    void print(){
+    	uint8_t i=0;
+    	uint8_t* data = (uint8_t*) rxMsg->header;
+    	for (i=0; i<sizeof(message_t); i++){
+    		printf("%02x ", *(data++));
+    	}
+    	printf("\r\n");
     }
 }

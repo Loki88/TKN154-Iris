@@ -78,7 +78,8 @@ implementation
 
 	async command uint8_t RF230DriverConfig.maxPayloadLength()
 	{
-		return sizeof(rf230packet_header_t) + TOSH_DATA_LENGTH;
+		// return sizeof(rf230packet_header_t) + TOSH_DATA_LENGTH;
+		return 127;
 	}
 
 	async command uint8_t RF230DriverConfig.metadataLength(message_t* msg)
