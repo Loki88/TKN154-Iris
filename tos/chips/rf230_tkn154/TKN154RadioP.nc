@@ -133,7 +133,7 @@ module TKN154RadioP {
 	/* functions */
 	uint16_t getRandomBackoff(uint8_t BE);
 	void stateAction();
-	void offPending();
+	error_t offPending();
 	void startReceiving();
 	void receiving();
 	void startTransmitting();
@@ -147,7 +147,7 @@ module TKN154RadioP {
 	void radioTxTransmit();
 	void unslottedTxTransmit();
 	void slottedTxTransmit();
-	void startSlotted();
+	error_t startSlotted();
 
 	//----- DEBUG
 	void printState();
@@ -157,6 +157,7 @@ module TKN154RadioP {
 	/* UTILITY */
 
 	inline bool isSpiAcquired() {
+		return TRUE;
 		return call SpiResource.isOwner() || (call SpiResource.immediateRequest() == SUCCESS);
 	}
 
@@ -377,17 +378,17 @@ module TKN154RadioP {
 			else if (m_state != S_RECEIVING) // it isn't possible to stop during tx
 				return FAIL;
 
-			m_state = S_OFF_PENDING;
+			// m_state = S_OFF_PENDING;
 		}
 
 		if(isSpiAcquired())
-			offPending();
+			return offPending();
 		else
 			call SpiResource.request();
 		return SUCCESS;
 	}
 
-	inline void offPending() { // executed in S_OFF_PENDING
+	inline error_t offPending() { // executed in S_OFF_PENDING
 		error_t result;
 
 		atomic {
@@ -396,10 +397,18 @@ module TKN154RadioP {
 
 		result = turnOff();
 		if(result == EALREADY){ // signal completion in RadioState.done()
-			signal RadioState.done();
+			// signal RadioState.done();
+			return EALREADY;
 		} else if (result != SUCCESS) {
-			printf ("offPending -> RESULT ERROR\r\n");
+			return FAIL;
+			// printf ("offPending -> RESULT ERROR %s\r\n", getErrorStr(result));
+			// // offPending();
+			// atomic{
+			// 	m_state = S_RECEIVING; // Radio is still on so it's receiving
+			// }
+			// call SpiResource.release();
 		}
+		return SUCCESS;
 	}
 
 	async command bool RadioOff.isOff() {
@@ -446,14 +455,15 @@ module TKN154RadioP {
 			atomic{
 				m_state = S_RADIO_OFF;
 			}
+			call SpiResource.release();
 		}
 	}
 
 	async event bool RadioReceive.header(message_t *msg) {
-		if(call RadioRx.isReceiving()) // rx is blocked if not in receiving state
+		// if(call RadioRx.isReceiving()) // rx is blocked if not in receiving state
 			return TRUE;
-		else
-			return FALSE;
+		// else
+		// 	return FALSE;
 	}
 
 	async event message_t* RadioReceive.receive(message_t *msg) {
@@ -503,10 +513,11 @@ module TKN154RadioP {
 		if(result == EALREADY) {
 			waitTx();
 		} else if (result != SUCCESS){
-			call SpiResource.release();
+			// call SpiResource.release();
 			atomic{
 				m_state = S_RADIO_OFF;
 			}
+			call SpiResource.release();
 		}
 	}
 
@@ -536,7 +547,7 @@ module TKN154RadioP {
 			case S_TRANSMITTING:
 			case S_TX_ACTIVE_UNSLOTTED_CSMA:
 			case S_TX_ACTIVE_SLOTTED_CSMA:
-				result = turnOff();
+				// result = turnOff();
 				break;
 			default: 
 				return;
@@ -553,6 +564,11 @@ module TKN154RadioP {
 				break;
 			case S_RADIO_ON_SLOT_TX:
 				nextIterationSlotted();
+				break;
+			case S_TRANSMITTING:
+			case S_TX_ACTIVE_UNSLOTTED_CSMA:
+			case S_TX_ACTIVE_SLOTTED_CSMA:
+				turnOff();
 				break;
 			default: 
 				return;
@@ -635,14 +651,14 @@ module TKN154RadioP {
 		m_ackFramePending = (frame->header->mhr[MHR_INDEX_FC1] & FC1_ACK_REQUEST) ? TRUE : FALSE;
 
 		if (isSpiAcquired())
-			startSlotted();
+			return startSlotted();
 		else
 			call SpiResource.request();
 		
 		return SUCCESS;
 	}
 
-	inline void startSlotted() {
+	inline error_t startSlotted() {
 		error_t result;
 
 		atomic {
