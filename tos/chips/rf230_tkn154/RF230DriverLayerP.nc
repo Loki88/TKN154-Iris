@@ -120,7 +120,7 @@ implementation
 	{
 		return ((void*)msg) + sizeof(message_t) - call RadioPacket.metadataLength(msg);
 	}
-	
+
 	/* ------ Prototypes ------ */
 	void energyDetection();
 
@@ -417,7 +417,7 @@ implementation
 
 	tasklet_async command error_t RadioState.turnOff()
 	{
-		if( cmd != CMD_NONE && cmd != CMD_RECEIVE && cmd != CMD_DOWNLOAD )
+		if( cmd != CMD_NONE )
 			return EBUSY;
 		else if( state == STATE_SLEEP )
 			return EALREADY;
@@ -430,9 +430,8 @@ implementation
 	
 	tasklet_async command error_t RadioState.standby()
 	{
-		if( cmd != CMD_NONE || (state == STATE_SLEEP && ! call RadioAlarm.isFree()) ){
+		if( cmd != CMD_NONE || (state == STATE_SLEEP && ! call RadioAlarm.isFree()) )
 			return EBUSY;
-		}
 		else if( state == STATE_TRX_OFF )
 			return EALREADY;
 
@@ -731,7 +730,8 @@ printf("\r\n"); printfflush();
 			call DiagMsg.send();
 		}
 #endif
-		
+		// print();
+
 		cmd = CMD_NONE;
 
 		// signal only if it has passed the CRC check

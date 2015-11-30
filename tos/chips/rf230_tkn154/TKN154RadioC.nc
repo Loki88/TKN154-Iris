@@ -19,6 +19,7 @@ configuration TKN154RadioC
 
 	} uses {
 		interface Notify<const void*> as PIBUpdate[uint8_t attributeID];
+		interface Resource as SpiResource;
 
 		interface Random;
 	    interface ReliableWait;
@@ -60,6 +61,7 @@ configuration TKN154RadioC
 	TknP.LocalTime -> Driver;
 	TknP.RadioSendCCA -> Driver;
 
+	SpiResource = TknP.SpiResource;
 	Random = TknP.Random;
 	ReliableWait = TknP.ReliableWait;
 	

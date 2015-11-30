@@ -105,9 +105,9 @@ implementation
 
 // -------- TKN154RadioC
 
-	// // TKN.SpiResource -> HplRF230C.SpiResource;
+	// TKN.SpiResource -> HplRF230C.SpiResource;
 
-	// TKN.SpiResource -> SendResourceC.Resource[unique(RADIO_SEND_RESOURCE)];
+	TKN.SpiResource -> SendResourceC.Resource[unique(RADIO_SEND_RESOURCE)];
 	TKN.RF230DriverConfig -> RadioP;
 
 
