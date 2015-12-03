@@ -6,7 +6,7 @@ configuration TKN154RadioC
 {
 	provides {
 
-		interface SplitControl;
+		// interface SplitControl;
 
 		interface RadioRx;
 		interface RadioTx;
@@ -14,58 +14,58 @@ configuration TKN154RadioC
 		interface UnslottedCsmaCa;
 		interface SlottedCsmaCa;
 		interface EnergyDetection;
-		interface Set<bool> as RadioPromiscuousMode;
+		// interface Set<bool> as RadioPromiscuousMode;
 		// interface Alarm<TRadio, tsize_radio> as Alarm1;
 
 	} uses {
 		interface Notify<const void*> as PIBUpdate[uint8_t attributeID];
-		interface Resource as SpiResource;
+		// interface Resource as SpiResource;
 
 		interface Random;
 	    interface ReliableWait;
 	    interface TimeCalc;
 	    interface FrameUtility;
-	    interface RF230DriverConfig;
+	    // interface RF230DriverConfig;
 	    
 	}
 
 } implementation {
 
-	components TKN154RadioP as TknP, RF230DriverLayerC as Driver, RF230RadioC as Radio, 
-			ActiveMessageAddressC, SerialPrintfC;
+	components RF230DriverLayerC as Driver, RF230RadioC as Radio, 
+			SerialPrintfC;
 
-	SplitControl = TknP;
-	RadioOff = TknP;
-	RadioRx = TknP;
-	RadioTx = TknP;
-	UnslottedCsmaCa = TknP;
-	SlottedCsmaCa = TknP;
-	EnergyDetection = TknP;
-	RadioPromiscuousMode = TknP;
-	PIBUpdate = TknP;
+	// SplitControl = TknP;
+	RadioOff = Driver;
+	RadioRx = Driver;
+	RadioTx = Driver;
+	UnslottedCsmaCa = Driver;
+	SlottedCsmaCa = Driver;
+	EnergyDetection = Driver;
+	// RadioPromiscuousMode = Driver;
+	PIBUpdate = Driver;
 
-	RF230DriverConfig = TknP.RF230DriverConfig;
+	// RF230DriverConfig = TknP.RF230DriverConfig;
 
 	
 
 	// Driver.ActiveMessageAddress -> ActiveMessageAddressC;
-	TknP.ActiveMessageAddress -> ActiveMessageAddressC;
+	// TknP.ActiveMessageAddress -> ActiveMessageAddressC;
 
-	TknP.RadioState -> Driver;
-	TknP.RadioSend -> Driver;
-	TknP.RadioReceive -> Driver;
+	// TknP.RadioState -> Driver;
+	// TknP.RadioSend -> Driver;
+	// TknP.RadioReceive -> Driver;
 	// TknP.RadioCCA -> Driver;
 	// TknP.RadioSendExtd -> Driver;
-	TknP.RadioED -> Driver;
-	TknP.RadioPacket -> Driver;
-	TknP.LocalTime -> Driver;
-	TknP.RadioSendCCA -> Driver;
+	// TknP.RadioED -> Driver;
+	// TknP.RadioPacket -> Driver;
+	// TknP.LocalTime -> Driver;
+	// TknP.RadioSendCCA -> Driver;
 
-	SpiResource = TknP.SpiResource;
-	Random = TknP.Random;
-	ReliableWait = TknP.ReliableWait;
+	// SpiResource = TknP.SpiResource;
+	Random = Driver.Random;
+	ReliableWait = Driver.ReliableWait;
 	
-	TimeCalc = TknP.TimeCalc;
-	FrameUtility = TknP.FrameUtility;
+	TimeCalc = Driver.TimeCalc;
+	FrameUtility = Driver.FrameUtility;
 	
 }
