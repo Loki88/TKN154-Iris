@@ -642,8 +642,6 @@ implementation
 		cmd = CMD_STANDBY;
 
 		call Leds.led0Toggle();
-
-		changeState();
 		
 		call Tasklet.schedule();
 
@@ -788,7 +786,7 @@ implementation
 
 		if (frame != NULL) {
 			cmd = CMD_STANDBY;
-			signal UnslottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, FAIL); // too many tries
+			signal UnslottedCsmaCa.transmitDone(frame, csma, m_ackFramePending, FAIL); // too many tries
 		}
 	}
 
@@ -867,7 +865,7 @@ implementation
 		ieee154_txframe_t *frame = NULL;
 		ieee154_csma_t *csma = NULL;
 
-		if (transmit((message_t*) m_frame, FALSE) == SUCCESS) {
+		if (transmit((message_t*) m_frame, TRUE) == SUCCESS) {
 			// TODO: handle ACK logic
 			return;
 		} else
@@ -1401,14 +1399,31 @@ implementation
 				{
 					RADIO_ASSERT( state == STATE_BUSY_TX_2_RX_ON );
 
-					state = STATE_RX_ON;
+
+					// here we disable the radio after a transmission
+					writeRegister(RF230_TRX_STATE, RF230_FORCE_TRX_OFF);
+
+					call IRQ.disable();
+					radioIrq = FALSE;
+
+					state = STATE_TRX_OFF;
 					cmd = CMD_NONE;
 
-					if ( cmdTKN == CMD_TX || cmdTKN == CMD_UNSLOT_TX || cmdTKN == CMD_SLOT_TX ) {
-						cmd = CMD_STANDBY;
-						cmdTKN = CMD_SIGNAL;
-						// call Tasklet.schedule();
-					}
+					if ( cmdTKN == CMD_TX ){
+						cmdTKN = CMD_WAIT;
+						signal RadioTx.transmitDone(m_frame, SUCCESS);
+					} else if ( cmdTKN == CMD_UNSLOT_TX ){
+						cmdTKN = CMD_WAIT;
+						signal UnslottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, SUCCESS);
+					} else if ( cmdTKN == CMD_SLOT_TX ){
+						cmdTKN = CMD_WAIT;
+						signal SlottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, m_remainingBackoff, SUCCESS);
+					} 
+					// if ( cmdTKN == CMD_TX || cmdTKN == CMD_UNSLOT_TX || cmdTKN == CMD_SLOT_TX ) {
+					// 	cmd = CMD_STANDBY;
+					// 	cmdTKN = CMD_SIGNAL;
+					// 	// call Tasklet.schedule();
+					// }
 					
 					// TODO: we could have missed a received message
 					RADIO_ASSERT( ! (irq & RF230_IRQ_RX_START) );
@@ -1844,6 +1859,14 @@ implementation
 
 		// go back to RX_ON state when finished
 		writeRegister(RF230_TRX_STATE, RF230_RX_ON);
+
+		// take the radio in TRX_RADIO_OFF state when finished
+		// writeRegister(RF230_TRX_STATE, RF230_FORCE_TRX_OFF);
+
+		// call IRQ.disable();
+		// radioIrq = FALSE;
+
+		// state = STATE_TRX_OFF;
 
 		if( timesync != 0 )
 			*(timesync_absolute_t*)timesync = (*(timesync_relative_t*)timesync) + time32;
