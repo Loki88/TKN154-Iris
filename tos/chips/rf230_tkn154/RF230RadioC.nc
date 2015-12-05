@@ -87,15 +87,14 @@ implementation
 
 	components RF230RadioP as RadioP, TKN154RadioC as TKN, HplRF230C;
 
-	
-	SplitControl = TKN;
-	RadioRx = TKN;
-	RadioTx = TKN;
-	RadioOff = TKN;
-	UnslottedCsmaCa = TKN;
-	SlottedCsmaCa = TKN;
-	EnergyDetection = TKN;
-	RadioPromiscuousMode = TKN;
+	SplitControl = RadioDriverLayerC;
+	RadioRx = RadioDriverLayerC;
+	RadioTx = RadioDriverLayerC;
+	RadioOff = RadioDriverLayerC;
+	UnslottedCsmaCa = RadioDriverLayerC;
+	SlottedCsmaCa = RadioDriverLayerC;
+	EnergyDetection = RadioDriverLayerC;
+	RadioPromiscuousMode = RadioDriverLayerC;
 	
 
 #ifdef RADIO_DEBUG
@@ -105,10 +104,10 @@ implementation
 
 // -------- TKN154RadioC
 
-	// TKN.SpiResource -> HplRF230C.SpiResource;
+	// // TKN.SpiResource -> HplRF230C.SpiResource;
 
-	TKN.SpiResource -> SendResourceC.Resource[unique(RADIO_SEND_RESOURCE)];
-	TKN.RF230DriverConfig -> RadioP;
+	// TKN.SpiResource -> SendResourceC.Resource[unique(RADIO_SEND_RESOURCE)];
+	// TKN.RF230DriverConfig -> RadioP;
 
 
 	Random = TKN;

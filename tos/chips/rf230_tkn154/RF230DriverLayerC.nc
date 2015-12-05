@@ -46,7 +46,16 @@ configuration RF230DriverLayerC
 		interface RadioPacket;
 		interface EDetection as RadioED;
 
-		interface CCATransmit;
+		interface SplitControl;
+		interface RadioRx;
+		interface RadioTx;
+		interface RadioOff;
+		interface UnslottedCsmaCa;
+		interface SlottedCsmaCa;
+		interface EnergyDetection;
+		interface Set<bool> as RadioPromiscuousMode;
+
+		// interface CCATransmit;
 
 		interface PacketField<uint8_t> as PacketTransmitPower;
 		interface PacketField<uint8_t> as PacketRSSI;
@@ -57,7 +66,6 @@ configuration RF230DriverLayerC
 		interface LocalTime<T62500hz> as LocalTimeRadio;
 		// interface Alarm<TRadio, tradio_size>;
 		
-		interface GetNow<bool> as CCA;
 	}
 
 	uses
@@ -73,13 +81,18 @@ configuration RF230DriverLayerC
 		interface FrameUtility;
 		interface IEEE154Frame as Frame;
 		interface CaptureTime;
+
+		interface Notify<const void*> as PIBUpdate[uint8_t attributeID];
+		interface Random;
+	    interface ReliableWait;
+	    interface TimeCalc;
 	}
 }
 
 implementation
 {
 	components RF230DriverLayerP as DriverLayerP, LocalTime62500hzC,
-		HplRF230C, BusyWaitMicroC, TaskletC, MainC, SerialPrintfC;
+		HplRF230C, BusyWaitMicroC, TaskletC, MainC, SerialPrintfC, LedsC;
 
 	RadioState = DriverLayerP;
 	RadioSend = DriverLayerP;
@@ -87,7 +100,16 @@ implementation
 	RadioCCA = DriverLayerP;
 	RadioPacket = DriverLayerP;
 	RadioED = DriverLayerP;
-	CCATransmit = DriverLayerP;
+	// CCATransmit = DriverLayerP;
+
+	SplitControl = DriverLayerP;
+	RadioRx = DriverLayerP;
+	RadioTx = DriverLayerP;
+	RadioOff = DriverLayerP;
+	UnslottedCsmaCa = DriverLayerP;
+	SlottedCsmaCa = DriverLayerP;
+	EnergyDetection = DriverLayerP;
+	RadioPromiscuousMode = DriverLayerP.RadioPromiscuousMode;
 
 	LocalTimeRadio = LocalTime62500hzC;
 
@@ -114,6 +136,8 @@ implementation
 	// Alarm = HplRF230C.Alarm;
 	RadioAlarm = DriverLayerP.RadioAlarm;
 
+	DriverLayerP.Leds -> LedsC; 
+
 	DriverLayerP.SELN -> HplRF230C.SELN;
 	DriverLayerP.SpiResource -> HplRF230C.SpiResource;
 	DriverLayerP.FastSpiByte -> HplRF230C;
@@ -135,6 +159,9 @@ implementation
 	components RealMainP;
 	RealMainP.PlatformInit -> DriverLayerP.PlatformInit;
 	
-	CCA = DriverLayerP;
 	CaptureTime = DriverLayerP;
+	PIBUpdate = DriverLayerP;
+	Random = DriverLayerP;
+    ReliableWait = DriverLayerP;
+    TimeCalc = DriverLayerP;
 }
