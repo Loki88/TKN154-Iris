@@ -188,6 +188,7 @@ implementation
 	};
 
 	tasklet_norace uint8_t cmdTKN;
+	tasklet_norace error_t m_txResult;
 
 	tasklet_norace uint8_t txType;
 	enum
@@ -226,7 +227,6 @@ implementation
 	void nextIterationSlotted();
 	error_t transmit(message_t* msg, bool cca);
 
-
 	inline char* getCMD(){
 		switch(cmd){
 			case CMD_NONE :				return "CMD_NONE"; 			break;
@@ -240,11 +240,6 @@ implementation
 			case CMD_SIGNAL_DONE:		return "CMD_SIGNAL_DONE"; 	break;
 			case CMD_DOWNLOAD:			return "CMD_DOWNLOAD"; 		break;
 			case CMD_ED:				return "CMD_ED"; 			break;
-			// case CMD_TX:				return "CMD_TX"; 			break;
-			// case CMD_UNSLOTTED:			return "CMD_UNSLOTTED"; 	break;
-			// case CMD_SLOTTED:			return "CMD_SLOTTED"; 		break;
-			// case CMD_SPLIT_ON :			return "CMD_SPLIT_ON"; 		break;
-			// case CMD_SPLIT_OFF:			return "CMD_SPLIT_OFF"; 	break;
 			default:					return "";
 		}
 	}
@@ -276,7 +271,6 @@ implementation
 			case ERESERVE:	val = "ERESERVE"; break;
 			case EALREADY:	val = "EALREADY"; break;
 			case ENOMEM:	val = "ENOMEM"; break;
-			// case ENOACK:	val = "ENOACK"; break;
 			case ELAST:		val = "ELAST"; break;
 			default: 		val = "UNKNOWN";
 		}
@@ -591,7 +585,7 @@ implementation
 	}
 
 	inline void printCMDState(){
-		// printf("\tcmd: %s\r\n\tstate: %s\r\n", getCMD(), getState());
+		printf("\tcmd: %s\r\n\tstate: %s\r\n", getCMD(), getState());
 	}
 
 
@@ -631,7 +625,7 @@ implementation
 
 	tasklet_async command error_t RadioOff.off(){
 
-		// printf("RadioOff.off -> %s\r\n", getCMD());  printfflush();
+		printf("RadioOff.off -> %s\r\n", getCMD());  printfflush();
 
 		if( cmd != CMD_NONE || cmdTKN != CMD_WAIT )
 			return FAIL;
@@ -641,7 +635,7 @@ implementation
 		cmdTKN = CMD_RADIO_OFF;
 		cmd = CMD_STANDBY;
 
-		call Leds.led0Toggle();
+		// call Leds.led0Toggle();
 		
 		call Tasklet.schedule();
 
@@ -657,7 +651,7 @@ implementation
 
 	tasklet_async command error_t RadioRx.enableRx(uint32_t t0, uint32_t dt) {
 
-		// printf("RadioRx.enableRx -> %s\r\n", getCMD()); printfflush();
+		printf("RadioRx.enableRx -> %s\r\n", getCMD()); printfflush();
 
 		if( cmd != CMD_NONE || cmdTKN != CMD_WAIT || (state == STATE_SLEEP && ! call RadioAlarm.isFree()) )
 			return FAIL;
@@ -679,7 +673,7 @@ implementation
 	}
 
 	async event void ReliableWait.waitRxDone() {
-		call Leds.led0Toggle();
+		// call Leds.led0Toggle();
 		call Tasklet.schedule();
 	}
 
@@ -786,7 +780,12 @@ implementation
 
 		if (frame != NULL) {
 			cmd = CMD_STANDBY;
-			signal UnslottedCsmaCa.transmitDone(frame, csma, m_ackFramePending, FAIL); // too many tries
+			m_txResult = FAIL;
+
+			printf("txUnslotted : frame != NULL\r\n");
+
+			call Tasklet.schedule();
+			// signal UnslottedCsmaCa.transmitDone(frame, csma, m_ackFramePending, FAIL); // too many tries
 		}
 	}
 
@@ -855,7 +854,10 @@ implementation
 
 		if (frame != NULL) { /* frame didn't fit in the remaining CAP */
 			cmd = CMD_STANDBY;
-			signal SlottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, m_remainingBackoff, ERETRY);
+			m_txResult = ERETRY;
+
+			call Tasklet.schedule();
+			// signal SlottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, m_remainingBackoff, ERETRY);
 		}
 	}
 
@@ -896,7 +898,10 @@ implementation
 
 		if (frame != NULL) {
 			cmd = CMD_STANDBY;
-			signal SlottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, m_remainingBackoff, FAIL);
+			m_txResult = result;
+
+			call Tasklet.schedule();
+			// signal SlottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, m_remainingBackoff, FAIL);
 		}
 	}
 
@@ -1251,7 +1256,6 @@ implementation
 
 		// signal only if it has passed the CRC check
 		if( crc == 0 ){
-			// rxMsg = signal RadioReceive.receive(rxMsg);
 			rxMsg = signal RadioRx.received(rxMsg);
 		}
 		// else
@@ -1407,18 +1411,19 @@ implementation
 					radioIrq = FALSE;
 
 					state = STATE_TRX_OFF;
-					cmd = CMD_NONE;
+					cmd = CMD_SIGNAL;
+					cmdTKN = CMD_SIGNAL;
 
-					if ( cmdTKN == CMD_TX ){
-						cmdTKN = CMD_WAIT;
-						signal RadioTx.transmitDone(m_frame, SUCCESS);
-					} else if ( cmdTKN == CMD_UNSLOT_TX ){
-						cmdTKN = CMD_WAIT;
-						signal UnslottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, SUCCESS);
-					} else if ( cmdTKN == CMD_SLOT_TX ){
-						cmdTKN = CMD_WAIT;
-						signal SlottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, m_remainingBackoff, SUCCESS);
-					} 
+					// if ( cmdTKN == CMD_TX ){
+					// 	cmdTKN = CMD_WAIT;
+					// 	signal RadioTx.transmitDone(m_frame, SUCCESS);
+					// } else if ( cmdTKN == CMD_UNSLOT_TX ){
+					// 	cmdTKN = CMD_WAIT;
+					// 	signal UnslottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, SUCCESS);
+					// } else if ( cmdTKN == CMD_SLOT_TX ){
+					// 	cmdTKN = CMD_WAIT;
+					// 	signal SlottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, m_remainingBackoff, SUCCESS);
+					// } 
 					// if ( cmdTKN == CMD_TX || cmdTKN == CMD_UNSLOT_TX || cmdTKN == CMD_SLOT_TX ) {
 					// 	cmd = CMD_STANDBY;
 					// 	cmdTKN = CMD_SIGNAL;
@@ -1542,14 +1547,14 @@ implementation
 							// printf("transmit frame signal done\r\n"); printfflush();
 							cmdTKN = CMD_WAIT;
 							if ( txType == TX ){
-								signal RadioTx.transmitDone(m_frame, SUCCESS);
+								signal RadioTx.transmitDone(m_frame, m_txResult);
 							}
 							else if ( txType == UNSLOTTED ){
-								signal UnslottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, SUCCESS);
+								signal UnslottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, m_txResult);
 							}
 							else if ( txType == SLOTTED ){
 								// printf("transmitDone: ackpending %d\r\n", m_ackFramePending);
-								signal SlottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, m_remainingBackoff, SUCCESS);
+								signal SlottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, m_remainingBackoff, m_txResult);
 							}
 							break;
 					}
@@ -1845,6 +1850,8 @@ implementation
 		call FastSpiByte.splitRead();
 		call SELN.set();
 
+		m_txResult = SUCCESS;
+
 		/*
 		 * There is a very small window (~1 microsecond) when the RF230 went 
 		 * into PLL_ON state but was somehow not properly initialized because 
@@ -1859,6 +1866,8 @@ implementation
 
 		// go back to RX_ON state when finished
 		writeRegister(RF230_TRX_STATE, RF230_RX_ON);
+
+		// TODO: handle ACK logic here
 
 		// take the radio in TRX_RADIO_OFF state when finished
 		// writeRegister(RF230_TRX_STATE, RF230_FORCE_TRX_OFF);

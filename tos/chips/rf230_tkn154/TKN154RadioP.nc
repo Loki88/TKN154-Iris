@@ -800,7 +800,7 @@ implementation
 				(frame->headerLen + frame->payloadLen + 2) > IEEE154_aMaxPHYPacketSize)
 			return EINVAL;
 		
-		if( cmd != CMD_NONE || (state == STATE_SLEEP && ! call RadioAlarm.isFree()) )
+		if( cmd != CMD_NONE || cmdTKN != CMD_WAIT || (state == STATE_SLEEP && ! call RadioAlarm.isFree()) )
 			return FAIL;
 
 		m_frame = frame;
@@ -1859,6 +1859,8 @@ implementation
 
 		// go back to RX_ON state when finished
 		writeRegister(RF230_TRX_STATE, RF230_RX_ON);
+
+		// TODO: handle ACK RX
 
 		// take the radio in TRX_RADIO_OFF state when finished
 		// writeRegister(RF230_TRX_STATE, RF230_FORCE_TRX_OFF);
