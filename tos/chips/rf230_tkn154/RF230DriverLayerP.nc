@@ -341,8 +341,11 @@ implementation
 		SLEEP_WAKEUP_TIME = (uint16_t)(880 * RADIO_ALARM_MICROSEC),
 		CCA_REQUEST_TIME = (uint16_t)(140 * RADIO_ALARM_MICROSEC),
 
-		TX_SFD_DELAY = (uint16_t)(176 * RADIO_ALARM_MICROSEC),
-		RX_SFD_DELAY = (uint16_t)(8 * RADIO_ALARM_MICROSEC),
+		// 8 undocumented delay, 128 for CSMA, 16 for delay, 5*32 for preamble and SFD
+		TX_SFD_DELAY = (uint16_t)((8 + 128 + 16 + 5*32) * RADIO_ALARM_MICROSEC),
+		
+		// 32 for frame length, 16 for delay
+		RX_SFD_DELAY = (uint16_t)((32 + 16) * RADIO_ALARM_MICROSEC),
 	};
 
 	tasklet_async event void RadioAlarm.fired()
@@ -625,7 +628,8 @@ implementation
 
 	tasklet_async command error_t RadioOff.off(){
 
-		printf("RadioOff.off -> %s\r\n", getCMD());  printfflush();
+		// printf("RadioOff.off -> %s\r\n", getCMD());  printfflush();ù
+		printf("OFF REQUEST - %lu\r\n", call LocalTime.get());
 
 		if( cmd != CMD_NONE || cmdTKN != CMD_WAIT )
 			return FAIL;
@@ -651,7 +655,9 @@ implementation
 
 	tasklet_async command error_t RadioRx.enableRx(uint32_t t0, uint32_t dt) {
 
-		printf("RadioRx.enableRx -> %s\r\n", getCMD()); printfflush();
+		// printf("RadioRx.enableRx -> %s\r\n", getCMD()); printfflush();
+
+		printf("RX request- %lu\r\n", call LocalTime.get());
 
 		if( cmd != CMD_NONE || cmdTKN != CMD_WAIT || (state == STATE_SLEEP && ! call RadioAlarm.isFree()) )
 			return FAIL;
@@ -665,7 +671,7 @@ implementation
 		cmdTKN = CMD_RX_ENABLE;
 
 		if (m_dt == 0 || call TimeCalc.hasExpired(m_t0, m_dt))
-			signal ReliableWait.waitRxDone();
+			call Tasklet.schedule();
 		else
 			call ReliableWait.waitRx(m_t0, m_dt);
 
@@ -1153,6 +1159,7 @@ implementation
 	{
 		uint8_t length;
 		uint16_t crc;
+		uint32_t time32;
 
 		call SELN.clr();
 		call FastSpiByte.write(RF230_CMD_FRAME_READ);
@@ -1230,27 +1237,7 @@ implementation
 		call SELN.set();
 		state = STATE_RX_ON;
 
-#ifdef RADIO_DEBUG_MESSAGES
-		if( call DiagMsg.record() )
-		{
-			length = Frame.getHeader(rxMsg)->length;
-
-			call DiagMsg.chr('r');
-			call DiagMsg.uint32(call PacketTimeStamp.isValid(rxMsg) ? call PacketTimeStamp.timestamp(rxMsg) : 0);
-			call DiagMsg.uint16(call RadioAlarm.getNow());
-			call DiagMsg.int8(crc == 0 ? length : -length);
-			call DiagMsg.hex8s(getPayload(rxMsg), length - 2);
-			call DiagMsg.int8(call PacketRSSI.isSet(rxMsg) ? call PacketRSSI.get(rxMsg) : -1);
-			call DiagMsg.uint8(call PacketLinkQuality.isSet(rxMsg) ? call PacketLinkQuality.get(rxMsg) : 0);
-			call DiagMsg.send();
-		}
-#endif
-		// print();
-
 		cmd = CMD_NONE;
-
-		// time32 = (int16_t)(time - RX_SFD_DELAY);
-		((ieee154_metadata_t*) rxMsg -> metadata)->timestamp = call CaptureTime.getTimestamp( capturedTime - RX_SFD_DELAY );
 
 		// ((ieee154_metadata_t*) rxMsg -> metadata)->timestamp -= (uint16_t)(32.0 * RADIO_ALARM_MICROSEC * (uint16_t)length);
 
@@ -1258,8 +1245,8 @@ implementation
 		if( crc == 0 ){
 			rxMsg = signal RadioRx.received(rxMsg);
 		}
-		// else
-		// 	printf("CRC FAILED!\r\n");
+		else
+			printf("CRC FAILED!\r\n");
 	}
 
 /*----------------- IRQ -----------------*/
@@ -1282,36 +1269,17 @@ implementation
 		
 		if( isSpiAcquired() )
 		{
-			uint16_t time;
 			uint32_t time32;
 			uint8_t irq;
 			uint8_t temp;
 			
 			// printf("SPI ACQUIRED\r\n");
 
-			atomic time = capturedTime;
+			// atomic time = capturedTime;
 			radioIrq = FALSE;
 			irq = readRegister(RF230_IRQ_STATUS);
 
-#ifdef RADIO_DEBUG
-			// TODO: handle this interrupt
-			if( irq & RF230_IRQ_TRX_UR )
-			{
-				if( call DiagMsg.record() )
-				{
-					call DiagMsg.str("assert ur");
-					call DiagMsg.uint16(call RadioAlarm.getNow());
-					call DiagMsg.hex8(readRegister(RF230_TRX_STATUS));
-					call DiagMsg.hex8(readRegister(RF230_TRX_STATE));
-					call DiagMsg.hex8(irq);
-					call DiagMsg.uint8(state);
-					call DiagMsg.uint8(cmd);
-					call DiagMsg.send();
-				}
-			}
-#endif
-
-#ifdef RF230_RSSI_ENERGY
+// #ifdef RF230_RSSI_ENERGY
 			if( irq & RF230_IRQ_TRX_END )
 			{
 				if( irq == RF230_IRQ_TRX_END || 
@@ -1320,7 +1288,7 @@ implementation
 				else
 					call PacketRSSI.clear(rxMsg);
 			}
-#endif
+// #endif
 
 			// sometimes we miss a PLL lock interrupt after turn on
 			if( cmd == CMD_TURNON || cmd == CMD_CHANNEL )
@@ -1388,6 +1356,11 @@ implementation
 					// }
 					// else
 					// 	call PacketTimeStamp.clear(rxMsg);
+
+				 	time32 = call LocalTime.get() - RX_SFD_DELAY;
+					((ieee154_metadata_t*) rxMsg -> metadata)->timestamp = time32;
+					printf("RX TIME %lu\r\n", time32);
+
 
 					cmd = CMD_RECEIVE;
 				}
@@ -1553,7 +1526,6 @@ implementation
 								signal UnslottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, m_txResult);
 							}
 							else if ( txType == SLOTTED ){
-								// printf("transmitDone: ackpending %d\r\n", m_ackFramePending);
 								signal SlottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, m_remainingBackoff, m_txResult);
 							}
 							break;
@@ -1575,7 +1547,6 @@ implementation
 			signal RadioSend.ready();
 
 		if( cmd == CMD_NONE ){
-			// printf("*********** HERE **************\r\n");
 			post releaseSpi();
 		}
 
@@ -1742,7 +1713,6 @@ implementation
 /*---------------------- CCATransmit ----------------------*/
     
     inline error_t transmit(message_t* msg, bool cca){
-    	uint16_t time;
 		uint8_t length;
 		uint8_t* data;
 		uint8_t header;
@@ -1787,7 +1757,7 @@ implementation
 		atomic
 		{
 			call SLP_TR.set();
-			time = call LocalTime.get();
+			// time32 = call LocalTime.get();
 		}
 		call SLP_TR.clr();
 #endif
@@ -1824,7 +1794,7 @@ implementation
 		atomic
 		{
 			call SLP_TR.set();
-			time = call LocalTime.get();
+			// time32 = call LocalTime.get();
 		}
 		call SLP_TR.clr();
 #endif
@@ -1869,36 +1839,14 @@ implementation
 
 		// TODO: handle ACK logic here
 
-		// take the radio in TRX_RADIO_OFF state when finished
-		// writeRegister(RF230_TRX_STATE, RF230_FORCE_TRX_OFF);
+		// get time at 
+		time32 += TX_SFD_DELAY;
 
-		// call IRQ.disable();
-		// radioIrq = FALSE;
+		((ieee154_txframe_t*) msg)->metadata->timestamp = time32;
 
-		// state = STATE_TRX_OFF;
-
-		if( timesync != 0 )
-			*(timesync_absolute_t*)timesync = (*(timesync_relative_t*)timesync) + time32;
-
-
-
-		((ieee154_txframe_t*) msg)->metadata->timestamp = call CaptureTime.getTimestamp( time + TX_SFD_DELAY );
+		printf("TX TIME %lu\r\n", time32);
 
 		// printf("Timestamp %lu\r\n", ((ieee154_txframe_t*) msg)->metadata->timestamp); printfflush();
-
-#ifdef RADIO_DEBUG_MESSAGES
-		if( call DiagMsg.record() )
-		{
-			length = ((ieee154_header_t*)msg->header)->length; // getHeader(msg)->length;
-
-			call DiagMsg.chr('t');
-			call DiagMsg.uint32(call PacketTimeStamp.isValid(rxMsg) ? call PacketTimeStamp.timestamp(rxMsg) : 0);
-			call DiagMsg.uint16(call RadioAlarm.getNow());
-			call DiagMsg.int8(length);
-			call DiagMsg.hex8s(getPayload(msg), length - 2);
-			call DiagMsg.send();
-		}
-#endif
 
 		// wait for the TRX_END interrupt
 		state = STATE_BUSY_TX_2_RX_ON;

@@ -60,7 +60,7 @@ configuration Ieee802154NonBeaconEnabledC
     interface SplitControl as PromiscuousMode;
     interface Get<uint64_t> as LocalExtendedAddress;
     // interface Timestamp;
-    // interface Packet;
+    interface Packet;
   }
 }
 implementation
@@ -86,7 +86,7 @@ implementation
   IEEE154TxBeaconPayload = MAC;
   LocalExtendedAddress = MAC;
   PromiscuousMode = MAC;
-  // Packet = MAC;
+  Packet = MAC;
 
   components RF230RadioC as PHY,
              new Alarm62500hz32C() as TKN154TimingPAlarm,
@@ -103,13 +103,13 @@ implementation
   TKN154RadioC.PIBUpdate[IEEE154_macPanCoordinator] -> MAC.PIBUpdate[IEEE154_macPanCoordinator];
 
   // Timestamp = PHY;
-  PHY.LocalTime -> LocalTime62500hzC;
+  PHY.LocalTimeRadio -> LocalTime62500hzC;
   PHY.ReliableWait -> TKN154TimingP;
   PHY.TimeCalc -> MAC;
   PHY.CaptureTime -> TKN154TimingP;
   TKN154TimingP.TimeCalc -> MAC;
   TKN154TimingP.Leds -> LedsC;
-  TKN154TimingP.CCA -> PHY;
+  // TKN154TimingP.CCA -> PHY;
   TKN154TimingP.SymbolAlarm -> TKN154TimingPAlarm;
 
   components new Timer62500C() as  MACTimer1,

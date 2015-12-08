@@ -60,7 +60,7 @@ configuration RF230RadioC
 		interface PacketField<uint8_t> as PacketRSSI;
 		interface LinkPacketMetadata;
 
-		interface LocalTime<T62500hz> as LocalTimeRadio;
+		
 		interface PacketTimeStamp<TRadio, uint32_t> as PacketTimeStampRadio;
 		interface PacketTimeStamp<TMilli, uint32_t> as PacketTimeStampMilli;
 
@@ -74,7 +74,7 @@ configuration RF230RadioC
 
 	    interface FrameUtility as DriverFrame;
 	    interface IEEE154Frame as Frame;
-
+	    interface LocalTime<T62500hz> as LocalTimeRadio;
 	}
 }
 

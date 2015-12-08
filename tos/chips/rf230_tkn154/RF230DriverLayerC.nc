@@ -63,7 +63,7 @@ configuration RF230DriverLayerC
 		interface PacketField<uint8_t> as PacketLinkQuality;
 		interface LinkPacketMetadata;
 
-		interface LocalTime<T62500hz> as LocalTimeRadio;
+		
 		// interface Alarm<TRadio, tradio_size>;
 		
 	}
@@ -86,12 +86,13 @@ configuration RF230DriverLayerC
 		interface Random;
 	    interface ReliableWait;
 	    interface TimeCalc;
+	    interface LocalTime<T62500hz> as LocalTimeRadio;
 	}
 }
 
 implementation
 {
-	components RF230DriverLayerP as DriverLayerP, LocalTime62500hzC,
+	components RF230DriverLayerP as DriverLayerP,
 		HplRF230C, BusyWaitMicroC, TaskletC, MainC, SerialPrintfC, LedsC;
 
 	RadioState = DriverLayerP;
@@ -111,7 +112,7 @@ implementation
 	EnergyDetection = DriverLayerP;
 	RadioPromiscuousMode = DriverLayerP.RadioPromiscuousMode;
 
-	LocalTimeRadio = LocalTime62500hzC;
+	LocalTimeRadio = DriverLayerP.LocalTime;
 
 	Config = DriverLayerP;
 
@@ -130,8 +131,6 @@ implementation
 	PacketLinkQuality = DriverLayerP.PacketLinkQuality;
 	PacketTimeStamp = DriverLayerP.PacketTimeStamp;
 	LinkPacketMetadata = DriverLayerP;
-
-	DriverLayerP.LocalTime -> LocalTime62500hzC;
 
 	// Alarm = HplRF230C.Alarm;
 	RadioAlarm = DriverLayerP.RadioAlarm;

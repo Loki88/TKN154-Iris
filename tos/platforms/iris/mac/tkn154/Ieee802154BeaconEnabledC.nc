@@ -97,8 +97,8 @@ implementation
   PHY.ReliableWait -> TKN154TimingP;
   PHY.CaptureTime -> TKN154TimingP;
   PHY.TimeCalc -> MAC;
-
-
+  PHY.LocalTimeRadio -> LocalTime62500hzC;
+  
   TKN154TimingP.TimeCalc -> MAC;
   TKN154TimingP.Leds -> LedsC;
   TKN154TimingP.SymbolAlarm -> TKN154TimingPAlarm;
