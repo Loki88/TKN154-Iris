@@ -1266,7 +1266,7 @@ implementation
 
 		atomic
 		{
-			capturedTime = time;
+			capturedTime = call LocalTime.get();
 			radioIrq = TRUE;
 		}
 

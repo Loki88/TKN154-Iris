@@ -59,8 +59,8 @@ configuration Ieee802154NonBeaconEnabledC
     interface IEEE154TxBeaconPayload;
     interface SplitControl as PromiscuousMode;
     interface Get<uint64_t> as LocalExtendedAddress;
-    interface Timestamp;
-    interface Packet;
+    // interface Timestamp;
+    // interface Packet;
   }
 }
 implementation
@@ -86,25 +86,23 @@ implementation
   IEEE154TxBeaconPayload = MAC;
   LocalExtendedAddress = MAC;
   PromiscuousMode = MAC;
-  Packet = MAC;
+  // Packet = MAC;
 
-  components RF230TKN154C as PHY,
-             new Alarm62500hz32C() as PHYAlarm1,
-             new Alarm62500hz32VirtualizedC() as PHYAlarm2,
+  components RF230RadioC as PHY,
              new Alarm62500hz32C() as TKN154TimingPAlarm,
              LocalTime62500hzC, TKN154TimingP;
 
-  // wire PHY to the PIB
-  PHY.PIBUpdate[IEEE154_macShortAddress] -> MAC.PIBUpdate[IEEE154_macShortAddress];
-  PHY.PIBUpdate[IEEE154_macPANId] -> MAC.PIBUpdate[IEEE154_macPANId];
-  PHY.PIBUpdate[IEEE154_phyCurrentChannel] -> MAC.PIBUpdate[IEEE154_phyCurrentChannel];
-  PHY.PIBUpdate[IEEE154_phyTransmitPower] -> MAC.PIBUpdate[IEEE154_phyTransmitPower];
-  PHY.PIBUpdate[IEEE154_phyCCAMode] -> MAC.PIBUpdate[IEEE154_phyCCAMode];
-  PHY.PIBUpdate[IEEE154_macPanCoordinator] -> MAC.PIBUpdate[IEEE154_macPanCoordinator];
+  components TKN154RadioC;
 
-  Timestamp = PHY;
-  PHY.Alarm1 -> PHYAlarm1;
-  PHY.Alarm2 -> PHYAlarm2;
+  // wire PHY to the PIB
+  TKN154RadioC.PIBUpdate[IEEE154_macShortAddress] -> MAC.PIBUpdate[IEEE154_macShortAddress];
+  TKN154RadioC.PIBUpdate[IEEE154_macPANId] -> MAC.PIBUpdate[IEEE154_macPANId];
+  TKN154RadioC.PIBUpdate[IEEE154_phyCurrentChannel] -> MAC.PIBUpdate[IEEE154_phyCurrentChannel];
+  TKN154RadioC.PIBUpdate[IEEE154_phyTransmitPower] -> MAC.PIBUpdate[IEEE154_phyTransmitPower];
+  TKN154RadioC.PIBUpdate[IEEE154_phyCCAMode] -> MAC.PIBUpdate[IEEE154_phyCCAMode];
+  TKN154RadioC.PIBUpdate[IEEE154_macPanCoordinator] -> MAC.PIBUpdate[IEEE154_macPanCoordinator];
+
+  // Timestamp = PHY;
   PHY.LocalTime -> LocalTime62500hzC;
   PHY.ReliableWait -> TKN154TimingP;
   PHY.TimeCalc -> MAC;
