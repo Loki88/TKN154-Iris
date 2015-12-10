@@ -68,8 +68,7 @@ implementation
 
   async command uint32_t CaptureTime.getTimestamp(uint16_t captured_time)
   {
-    uint32_t now = call LocalTime.get();
-    // uint32_t now = call SymbolAlarm.getNow();
+    uint32_t now = call SymbolAlarm.getNow();
 
     // On telos the capture_time is from the 32 KHz quartz, in
     // order to transform it to symbols we multiply by 2

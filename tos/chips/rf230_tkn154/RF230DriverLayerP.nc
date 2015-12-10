@@ -341,11 +341,9 @@ implementation
 		SLEEP_WAKEUP_TIME = (uint16_t)(880 * RADIO_ALARM_MICROSEC),
 		CCA_REQUEST_TIME = (uint16_t)(140 * RADIO_ALARM_MICROSEC),
 
-		// 8 undocumented delay, 128 for CSMA, 16 for delay, 5*32 for preamble and SFD
-		TX_SFD_DELAY = (uint16_t)((8 + 128 + 16 + 5*32) * RADIO_ALARM_MICROSEC),
+		TX_SFD_DELAY = (uint16_t)((176 * RADIO_ALARM_MICROSEC) >> 5),
 		
-		// 32 for frame length, 16 for delay
-		RX_SFD_DELAY = (uint16_t)((32 + 16) * RADIO_ALARM_MICROSEC),
+		RX_SFD_DELAY = (uint16_t)((8 * RADIO_ALARM_MICROSEC) >> 5),
 	};
 
 	tasklet_async event void RadioAlarm.fired()
@@ -1344,8 +1342,7 @@ implementation
 					 */
 					if( irq == RF230_IRQ_RX_START ) // just to be cautious
 					{
-						time32 = call LocalTime.get();
-						time32 += (int16_t)(time * 2 - RX_SFD_DELAY) - (int16_t)(time32);
+						time32 = call CaptureTime.getTimestamp(time - RX_SFD_DELAY);
 						((ieee154_metadata_t*) rxMsg -> metadata)->timestamp = time32;
 						printf("Timestamp %lu\r\n", time32); printfflush();
 					}
@@ -1377,23 +1374,7 @@ implementation
 					state = STATE_TRX_OFF;
 					cmd = CMD_SIGNAL;
 					cmdTKN = CMD_SIGNAL;
-
-					// if ( cmdTKN == CMD_TX ){
-					// 	cmdTKN = CMD_WAIT;
-					// 	signal RadioTx.transmitDone(m_frame, SUCCESS);
-					// } else if ( cmdTKN == CMD_UNSLOT_TX ){
-					// 	cmdTKN = CMD_WAIT;
-					// 	signal UnslottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, SUCCESS);
-					// } else if ( cmdTKN == CMD_SLOT_TX ){
-					// 	cmdTKN = CMD_WAIT;
-					// 	signal SlottedCsmaCa.transmitDone(m_frame, m_csma, m_ackFramePending, m_remainingBackoff, SUCCESS);
-					// } 
-					// if ( cmdTKN == CMD_TX || cmdTKN == CMD_UNSLOT_TX || cmdTKN == CMD_SLOT_TX ) {
-					// 	cmd = CMD_STANDBY;
-					// 	cmdTKN = CMD_SIGNAL;
-					// 	// call Tasklet.schedule();
-					// }
-					
+				
 					// TODO: we could have missed a received message
 					RADIO_ASSERT( ! (irq & RF230_IRQ_RX_START) );
 				}
@@ -1709,7 +1690,6 @@ implementation
 		uint8_t header;
 		uint32_t time32;
 		uint16_t time;
-		void* timesync;
 		ieee154_txframe_t *frame = (ieee154_txframe_t*) msg;
 
 		// printf("\ttransmit -> state: %s, spi acquired: %d\r\n", getState(), isSpiAcquired());
@@ -1734,7 +1714,6 @@ implementation
 
 		// do something useful, just to wait a little
 		time32 = call LocalTime.get();
-		timesync = call PacketTimeSyncOffset.isSet(msg) ? ((void*)msg) + call PacketTimeSyncOffset.get(msg) : 0;
 
 		// we have missed an incoming message in this short amount of time
 		if( (readRegister(RF230_TRX_STATUS) & RF230_TRX_STATUS_MASK) != RF230_PLL_ON )
@@ -1750,6 +1729,7 @@ implementation
 		{
 			call SLP_TR.set();
 			time = call RadioAlarm.getNow();
+			time32 = call CaptureTime.getTimestamp(time+TX_SFD_DELAY);
 		}
 		call SLP_TR.clr();
 #endif
@@ -1785,6 +1765,7 @@ implementation
 		{
 			call SLP_TR.set();
 			time = call RadioAlarm.getNow();
+			time32 = call CaptureTime.getTimestamp(time+TX_SFD_DELAY);
 		}
 		call SLP_TR.clr();
 #endif
@@ -1823,7 +1804,7 @@ implementation
 		// TODO: handle ACK logic here
 
 		// get time at 
-		time32 += (uint16_t)(time*2+TX_SFD_DELAY) - (uint16_t)time32;
+		// time32 += (uint16_t)(time * 2 + TX_SFD_DELAY) - (uint16_t)time32;
 
 		((ieee154_txframe_t*) msg)->metadata->timestamp = time32;
 
