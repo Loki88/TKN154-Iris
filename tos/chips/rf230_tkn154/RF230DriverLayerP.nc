@@ -401,6 +401,8 @@ implementation
 
 	void initRadio()
 	{
+		printf("TX_SFD_DELAY %d\r\nRX_SFD_DELAY %d\r\n", TX_SFD_DELAY, RX_SFD_DELAY);
+
 		call BusyWait.wait(510);
 
 		call RSTN.clr();
@@ -1015,7 +1017,6 @@ implementation
 
 		// do something useful, just to wait a little
 		time32 = call LocalTime.get();
-		timesync = call PacketTimeSyncOffset.isSet(msg) ? ((void*)msg) + call PacketTimeSyncOffset.get(msg) : 0;
 
 		// we have missed an incoming message in this short amount of time
 		if( (readRegister(RF230_TRX_STATUS) & RF230_TRX_STATUS_MASK) != RF230_PLL_ON )
@@ -1239,8 +1240,6 @@ implementation
 
 		cmd = CMD_NONE;
 
-		// ((ieee154_metadata_t*) rxMsg -> metadata)->timestamp -= (uint16_t)(32.0 * RADIO_ALARM_MICROSEC * (uint16_t)length);
-
 		// signal only if it has passed the CRC check
 		if( crc == 0 ){
 			rxMsg = signal RadioRx.received(rxMsg);
@@ -1257,7 +1256,7 @@ implementation
 
 		atomic
 		{
-			capturedTime = call LocalTime.get();
+			capturedTime = time;
 			radioIrq = TRUE;
 		}
 
@@ -1272,8 +1271,8 @@ implementation
 			uint32_t time32;
 			uint8_t irq;
 			uint8_t temp;
+			uint16_t time = capturedTime;
 			
-			// printf("SPI ACQUIRED\r\n");
 
 			// atomic time = capturedTime;
 			radioIrq = FALSE;
@@ -1306,11 +1305,8 @@ implementation
 				RADIO_ASSERT( state == STATE_BUSY_TX_2_RX_ON );
 			}
 
-			// printf("*********** HERE AGAIN %s ************\r\n", getCMD());
-
 			if( irq & RF230_IRQ_RX_START )
 			{
-				// printf("*********** HERE AGAIN %s ************\r\n", getCMD());
 
 				if( cmd == CMD_CCA )
 				{
@@ -1346,21 +1342,16 @@ implementation
 					 * we could not be after a transmission, because then cmd = 
 					 * CMD_TRANSMIT.
 					 */
-					// if( irq == RF230_IRQ_RX_START ) // just to be cautious
-					// {
-						// printf("---------- RF230_IRQ_RX_START -------------\r\n");
-						// time32 = call LocalTime.get();
-						// time32 += (int16_t)(time - RX_SFD_DELAY); // - (int16_t)(time32);
-						// ((ieee154_metadata_t*) rxMsg -> metadata)->timestamp = call CaptureTime.getTimestamp(time32);
-						// printf("Timestamp %lu\r\n", ((ieee154_metadata_t*) rxMsg -> metadata)->timestamp); printfflush();
-					// }
-					// else
-					// 	call PacketTimeStamp.clear(rxMsg);
-
-				 	time32 = call LocalTime.get() - RX_SFD_DELAY;
-					((ieee154_metadata_t*) rxMsg -> metadata)->timestamp = time32;
-					printf("RX TIME %lu\r\n", time32);
-
+					if( irq == RF230_IRQ_RX_START ) // just to be cautious
+					{
+						time32 = call LocalTime.get();
+						time32 += (int16_t)(time * 2 - RX_SFD_DELAY) - (int16_t)(time32);
+						((ieee154_metadata_t*) rxMsg -> metadata)->timestamp = time32;
+						printf("Timestamp %lu\r\n", time32); printfflush();
+					}
+					else
+						call PacketTimeStamp.clear(rxMsg);
+	
 
 					cmd = CMD_RECEIVE;
 				}
@@ -1717,6 +1708,7 @@ implementation
 		uint8_t* data;
 		uint8_t header;
 		uint32_t time32;
+		uint16_t time;
 		void* timesync;
 		ieee154_txframe_t *frame = (ieee154_txframe_t*) msg;
 
@@ -1757,7 +1749,7 @@ implementation
 		atomic
 		{
 			call SLP_TR.set();
-			// time32 = call LocalTime.get();
+			time = call RadioAlarm.getNow();
 		}
 		call SLP_TR.clr();
 #endif
@@ -1788,13 +1780,11 @@ implementation
 // printf("%02x ", *(data-1));
 		} while( --header != 0 );
 
-		// header = ((ieee154_txframe_t*)msg->data)->headerLen - Config.headerPreloadLength();
-
 #ifdef RF230_SLOW_SPI
 		atomic
 		{
 			call SLP_TR.set();
-			// time32 = call LocalTime.get();
+			time = call RadioAlarm.getNow();
 		}
 		call SLP_TR.clr();
 #endif
@@ -1802,19 +1792,12 @@ implementation
 		data = frame->payload;
 
 
-
-		// time32 += (int16_t)(time + TX_SFD_DELAY) - (int16_t)(time32);
-
-		// time32 += (uint16_t)(RX_SFD_DELAY) + (uint16_t)(32.0 * RADIO_ALARM_MICROSEC * (uint16_t)length);
-
-		if( timesync != 0 )
-			*(timesync_relative_t*)timesync = (*(timesync_absolute_t*)timesync) - time32;
-
 		while( length-- != 0 ){
 			call FastSpiByte.splitReadWrite(*(data++));
 // printf("%02x ", *(data-1));
 		}
 // printf("\r\n"); printfflush();
+
 
 		// wait for the SPI transfer to finish
 		call FastSpiByte.splitRead();
@@ -1840,7 +1823,7 @@ implementation
 		// TODO: handle ACK logic here
 
 		// get time at 
-		time32 += TX_SFD_DELAY;
+		time32 += (uint16_t)(time*2+TX_SFD_DELAY) - (uint16_t)time32;
 
 		((ieee154_txframe_t*) msg)->metadata->timestamp = time32;
 

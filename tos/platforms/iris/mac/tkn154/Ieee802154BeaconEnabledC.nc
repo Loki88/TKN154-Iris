@@ -102,6 +102,7 @@ implementation
   TKN154TimingP.TimeCalc -> MAC;
   TKN154TimingP.Leds -> LedsC;
   TKN154TimingP.SymbolAlarm -> TKN154TimingPAlarm;
+  TKN154TimingP.LocalTime -> LocalTime62500hzC;
 
 
   components new Alarm62500hz32VirtualizedC() as  MACAlarm1,
