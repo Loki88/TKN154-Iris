@@ -167,11 +167,6 @@ implementation
 		CMD_SIGNAL_DONE = 8,		// signal the end of the state transition
 		CMD_DOWNLOAD = 9,		// download the received message
 		CMD_ED = 10,
-		// CMD_TX = 11,			// transmits without CCA
-		// CMD_UNSLOTTED = 12,
-		// CMD_SLOTTED = 13,
-		// CMD_SPLIT_ON = 14,
-		// CMD_SPLIT_OFF = 15,
 	};
 
 	enum
@@ -341,9 +336,11 @@ implementation
 		SLEEP_WAKEUP_TIME = (uint16_t)(880 * RADIO_ALARM_MICROSEC),
 		CCA_REQUEST_TIME = (uint16_t)(140 * RADIO_ALARM_MICROSEC),
 
-		TX_SFD_DELAY = (uint16_t)((176 * RADIO_ALARM_MICROSEC) >> 5),
+		TX_SFD_DELAY = (uint16_t)((8 + 128 + 16 + 5*32) * RADIO_ALARM_MICROSEC),
 		
-		RX_SFD_DELAY = (uint16_t)((8 * RADIO_ALARM_MICROSEC) >> 5),
+		RX_SFD_DELAY = (uint16_t)((32 + 16) * RADIO_ALARM_MICROSEC),
+
+		T_PRESCAL_MASK = 0xFFFF >> (MICA_DIVIDE_ONE_FOR_32KHZ_LOG2 - 1),
 	};
 
 	tasklet_async event void RadioAlarm.fired()
@@ -399,7 +396,11 @@ implementation
 
 	void initRadio()
 	{
+		printf("\r\n***********************************\r\n");
+
 		printf("TX_SFD_DELAY %d\r\nRX_SFD_DELAY %d\r\n", TX_SFD_DELAY, RX_SFD_DELAY);
+
+		printf("RadioAlarm %d, LocalTime %lu\r\n", call RadioAlarm.getNow(), call LocalTime.get());
 
 		call BusyWait.wait(510);
 
@@ -629,7 +630,7 @@ implementation
 	tasklet_async command error_t RadioOff.off(){
 
 		// printf("RadioOff.off -> %s\r\n", getCMD());  printfflush();ù
-		printf("OFF REQUEST - %lu\r\n", call LocalTime.get());
+		// printf("OFF REQUEST - %lu\r\n", call LocalTime.get());
 
 		if( cmd != CMD_NONE || cmdTKN != CMD_WAIT )
 			return FAIL;
@@ -657,7 +658,7 @@ implementation
 
 		// printf("RadioRx.enableRx -> %s\r\n", getCMD()); printfflush();
 
-		printf("RX request- %lu\r\n", call LocalTime.get());
+		// printf("RX request - %lu + %lu; real - %lu\r\n", t0, dt, call LocalTime.get());
 
 		if( cmd != CMD_NONE || cmdTKN != CMD_WAIT || (state == STATE_SLEEP && ! call RadioAlarm.isFree()) )
 			return FAIL;
@@ -665,13 +666,14 @@ implementation
 			return EALREADY;
 
 		m_dt = dt;
-		m_t0 = t0;
+		m_t0 = t0 - 22;
 
 		cmd = CMD_TURNON;
 		cmdTKN = CMD_RX_ENABLE;
 
-		if (m_dt == 0 || call TimeCalc.hasExpired(m_t0, m_dt))
+		if (m_dt == 0 || call TimeCalc.hasExpired(m_t0, m_dt)){
 			call Tasklet.schedule();
+		}
 		else
 			call ReliableWait.waitRx(m_t0, m_dt);
 
@@ -709,7 +711,7 @@ implementation
 		txType = TX;
 		cmdTKN = CMD_TX;
 
-		if( m_dt == 0 || call TimeCalc.hasExpired(m_t0, m_dt )){
+		if( m_dt == 0 || call TimeCalc.hasExpired(m_t0, m_dt)){
 			signal ReliableWait.waitTxDone();
 		}
 		else{
@@ -787,8 +789,6 @@ implementation
 		if (frame != NULL) {
 			cmd = CMD_STANDBY;
 			m_txResult = FAIL;
-
-			printf("txUnslotted : frame != NULL\r\n");
 
 			call Tasklet.schedule();
 			// signal UnslottedCsmaCa.transmitDone(frame, csma, m_ackFramePending, FAIL); // too many tries
@@ -1016,6 +1016,7 @@ implementation
 		// do something useful, just to wait a little
 		time32 = call LocalTime.get();
 
+
 		// we have missed an incoming message in this short amount of time
 		if( (readRegister(RF230_TRX_STATUS) & RF230_TRX_STATUS_MASK) != RF230_PLL_ON )
 		{
@@ -1158,7 +1159,6 @@ implementation
 	{
 		uint8_t length;
 		uint16_t crc;
-		uint32_t time32;
 
 		call SELN.clr();
 		call FastSpiByte.write(RF230_CMD_FRAME_READ);
@@ -1237,6 +1237,9 @@ implementation
 		state = STATE_RX_ON;
 
 		cmd = CMD_NONE;
+
+		length = ((ieee154_header_t*) rxMsg -> header)->length;
+		((ieee154_metadata_t*) rxMsg -> metadata)->timestamp -= ((uint16_t)(length) << (RADIO_ALARM_MILLI_EXP - 5));
 
 		// signal only if it has passed the CRC check
 		if( crc == 0 ){
@@ -1342,9 +1345,16 @@ implementation
 					 */
 					if( irq == RF230_IRQ_RX_START ) // just to be cautious
 					{
-						time32 = call CaptureTime.getTimestamp(time - RX_SFD_DELAY);
+						time32 = call LocalTime.get();
+
+						time -= RX_SFD_DELAY;
+						time >>= (MICA_DIVIDE_ONE_FOR_32KHZ_LOG2 - 1);
+
+						time32 = time32 - (uint16_t)time - (uint16_t)(time32 & T_PRESCAL_MASK) - 76;
+
 						((ieee154_metadata_t*) rxMsg -> metadata)->timestamp = time32;
-						printf("Timestamp %lu\r\n", time32); printfflush();
+
+						printf("RX TIME - %lu\r\n", time32); printfflush();
 					}
 					else
 						call PacketTimeStamp.clear(rxMsg);
@@ -1451,6 +1461,7 @@ implementation
 
 			if( cmd == CMD_SIGNAL_DONE )
 			{
+
 				cmd = CMD_NONE;
 				if ( cmdTKN == CMD_WAIT )
 					signal RadioState.done();
@@ -1469,6 +1480,7 @@ implementation
 						case CMD_RX_ENABLE:
 							// printf("signal RadioRx.enableRxDone\r\n"); printfflush();
 							cmdTKN = CMD_WAIT;
+							// printf("Receiving - %lu\r\n", call LocalTime.get());
 							signal RadioRx.enableRxDone();
 							break;
 						case CMD_RADIO_OFF:
@@ -1682,7 +1694,7 @@ implementation
 
     default async event void RadioED.edDone(uint8_t energyLevel) {}
 	
-/*---------------------- CCATransmit ----------------------*/
+/*---------------------- Transmit ----------------------*/
     
     inline error_t transmit(message_t* msg, bool cca){
 		uint8_t length;
@@ -1691,6 +1703,8 @@ implementation
 		uint32_t time32;
 		uint16_t time;
 		ieee154_txframe_t *frame = (ieee154_txframe_t*) msg;
+
+		// printf("RadioAlarm %u, LocalTime %lu\r\n", call RadioAlarm.getNow(), call LocalTime.get());
 
 		// printf("\ttransmit -> state: %s, spi acquired: %d\r\n", getState(), isSpiAcquired());
 
@@ -1729,7 +1743,6 @@ implementation
 		{
 			call SLP_TR.set();
 			time = call RadioAlarm.getNow();
-			time32 = call CaptureTime.getTimestamp(time+TX_SFD_DELAY);
 		}
 		call SLP_TR.clr();
 #endif
@@ -1765,13 +1778,11 @@ implementation
 		{
 			call SLP_TR.set();
 			time = call RadioAlarm.getNow();
-			time32 = call CaptureTime.getTimestamp(time+TX_SFD_DELAY);
 		}
 		call SLP_TR.clr();
 #endif
 
 		data = frame->payload;
-
 
 		while( length-- != 0 ){
 			call FastSpiByte.splitReadWrite(*(data++));
@@ -1785,6 +1796,14 @@ implementation
 		call SELN.set();
 
 		m_txResult = SUCCESS;
+
+		
+		time = (uint16_t) (time + TX_SFD_DELAY);
+		time >>= (MICA_DIVIDE_ONE_FOR_32KHZ_LOG2 - 1);
+
+		time32 = time32 - (uint16_t)(time32 & T_PRESCAL_MASK) + (uint16_t)time;
+
+		printf("TX TIME - %lu\r\n", time32);
 
 		/*
 		 * There is a very small window (~1 microsecond) when the RF230 went 
@@ -1803,14 +1822,10 @@ implementation
 
 		// TODO: handle ACK logic here
 
-		// get time at 
-		// time32 += (uint16_t)(time * 2 + TX_SFD_DELAY) - (uint16_t)time32;
+
 
 		((ieee154_txframe_t*) msg)->metadata->timestamp = time32;
 
-		printf("TX TIME %lu\r\n", time32);
-
-		// printf("Timestamp %lu\r\n", ((ieee154_txframe_t*) msg)->metadata->timestamp); printfflush();
 
 		// wait for the TRX_END interrupt
 		state = STATE_BUSY_TX_2_RX_ON;

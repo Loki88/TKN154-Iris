@@ -40,6 +40,7 @@
  * (this code is experimental)
  */
 
+#include "printf.h"
 #include "TKN154_platform.h"
 module TKN154TimingP
 {
@@ -95,11 +96,11 @@ implementation
   {
     atomic{
       if (m_state != S_WAIT_OFF){
-        ASSERT(0);
         return;
       }
       m_state = S_WAIT_RX;
     }
+    printf("\r\nReliableWait.waitRx\r\n");
     call SymbolAlarm.startAt(t0 - 16, dt); // subtract 12 symbols required for Rx calibration
   }
 
@@ -107,11 +108,12 @@ implementation
   {
     atomic{
       if (m_state != S_WAIT_OFF){
-        ASSERT(0);
         return;
       }
       m_state = S_WAIT_TX;
     }
+
+    printf("\r\nReliableWait.waitTx\r\n");
     call SymbolAlarm.startAt(t0 - 16, dt); // subtract 12 symbols required for Tx calibration
   }
     
@@ -119,7 +121,6 @@ implementation
   {
     atomic{
       if (m_state != S_WAIT_OFF){
-        ASSERT(0);
         return;
       }
       m_state = S_WAIT_BACKOFF;
@@ -132,10 +133,20 @@ implementation
     atomic{
       switch (m_state)
       {
-        case S_WAIT_RX: m_state = S_WAIT_OFF; signal ReliableWait.waitRxDone(); break;
-        case S_WAIT_TX: m_state = S_WAIT_OFF; signal ReliableWait.waitTxDone(); break;
-        case S_WAIT_BACKOFF: m_state = S_WAIT_OFF; signal ReliableWait.waitBackoffDone(); break;
-        default: ASSERT(0); break;
+        case S_WAIT_RX: 
+          m_state = S_WAIT_OFF;
+          signal ReliableWait.waitRxDone();
+          break;
+        case S_WAIT_TX:
+          m_state = S_WAIT_OFF;
+          signal ReliableWait.waitTxDone();
+          break;
+        case S_WAIT_BACKOFF:
+          m_state = S_WAIT_OFF;
+          signal ReliableWait.waitBackoffDone();
+          break;
+        default:
+          break;
       }
     }
   }
