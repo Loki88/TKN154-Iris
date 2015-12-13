@@ -100,7 +100,7 @@ implementation
       }
       m_state = S_WAIT_RX;
     }
-    printf("\r\nReliableWait.waitRx\r\n");
+    // printf("\r\nReliableWait.waitRx\r\n");
     call SymbolAlarm.startAt(t0 - 16, dt); // subtract 12 symbols required for Rx calibration
   }
 
@@ -113,7 +113,7 @@ implementation
       m_state = S_WAIT_TX;
     }
 
-    printf("\r\nReliableWait.waitTx\r\n");
+    // printf("\r\nReliableWait.waitTx\r\n");
     call SymbolAlarm.startAt(t0 - 16, dt); // subtract 12 symbols required for Tx calibration
   }
     

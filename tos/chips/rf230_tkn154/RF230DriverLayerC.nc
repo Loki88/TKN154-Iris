@@ -93,7 +93,7 @@ configuration RF230DriverLayerC
 implementation
 {
 	components RF230DriverLayerP as DriverLayerP,
-		HplRF230C, BusyWaitMicroC, TaskletC, MainC, SerialPrintfC, LedsC;
+		HplRF230C, BusyWaitMicroC, TaskletC, MainC, LedsC;
 
 	RadioState = DriverLayerP;
 	RadioSend = DriverLayerP;

@@ -10,8 +10,5 @@ implementation
 
   Alarm = Alarm62500hz32P;
 
-#if defined(PLATFORM_TELOSB)
-  MainC -> Alarm32khz32C.Init;
-#endif
   Alarm62500hz32P.AlarmFrom -> Alarm32khz32C;
 }

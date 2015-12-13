@@ -336,11 +336,16 @@ implementation
 		SLEEP_WAKEUP_TIME = (uint16_t)(880 * RADIO_ALARM_MICROSEC),
 		CCA_REQUEST_TIME = (uint16_t)(140 * RADIO_ALARM_MICROSEC),
 
-		TX_SFD_DELAY = (uint16_t)((8 + 128 + 16 + 5*32) * RADIO_ALARM_MICROSEC),
+		// TX_SFD_DELAY = (uint16_t)((8 + 128 + 16 + 5*32) * RADIO_ALARM_MICROSEC),
 		
-		RX_SFD_DELAY = (uint16_t)((32 + 16) * RADIO_ALARM_MICROSEC),
+		// RX_SFD_DELAY = (uint16_t)((32 + 16) * RADIO_ALARM_MICROSEC),
 
-		T_PRESCAL_MASK = 0xFFFF >> (MICA_DIVIDE_ONE_FOR_32KHZ_LOG2 - 1),
+		TX_SFD_DELAY = (uint16_t)(176 * RADIO_ALARM_MICROSEC),
+		RX_SFD_DELAY = (uint16_t)(8 * RADIO_ALARM_MICROSEC),
+
+		ALARM_SCALE = (MICA_DIVIDE_ONE_FOR_32KHZ_LOG2 - 1),
+
+		T_PRESCAL_MASK = (uint16_t)(0xFFFF >> ALARM_SCALE),
 	};
 
 	tasklet_async event void RadioAlarm.fired()
@@ -396,11 +401,11 @@ implementation
 
 	void initRadio()
 	{
-		printf("\r\n***********************************\r\n");
+		// printf("\r\n***********************************\r\n");
 
-		printf("TX_SFD_DELAY %d\r\nRX_SFD_DELAY %d\r\n", TX_SFD_DELAY, RX_SFD_DELAY);
+		// printf("TX_SFD_DELAY %d\r\nRX_SFD_DELAY %d\r\n", TX_SFD_DELAY, RX_SFD_DELAY);
 
-		printf("RadioAlarm %d, LocalTime %lu\r\n", call RadioAlarm.getNow(), call LocalTime.get());
+		// printf("RadioAlarm %d, LocalTime %lu\r\n", call RadioAlarm.getNow(), call LocalTime.get());
 
 		call BusyWait.wait(510);
 
@@ -589,7 +594,7 @@ implementation
 	}
 
 	inline void printCMDState(){
-		printf("\tcmd: %s\r\n\tstate: %s\r\n", getCMD(), getState());
+		// printf("\tcmd: %s\r\n\tstate: %s\r\n", getCMD(), getState());
 	}
 
 
@@ -631,6 +636,7 @@ implementation
 
 		// printf("RadioOff.off -> %s\r\n", getCMD());  printfflush();ù
 		// printf("OFF REQUEST - %lu\r\n", call LocalTime.get());
+		printf("o.");
 
 		if( cmd != CMD_NONE || cmdTKN != CMD_WAIT )
 			return FAIL;
@@ -660,13 +666,15 @@ implementation
 
 		// printf("RX request - %lu + %lu; real - %lu\r\n", t0, dt, call LocalTime.get());
 
+		printf("r.");
+
 		if( cmd != CMD_NONE || cmdTKN != CMD_WAIT || (state == STATE_SLEEP && ! call RadioAlarm.isFree()) )
 			return FAIL;
 		else if( state == STATE_RX_ON )
 			return EALREADY;
 
 		m_dt = dt;
-		m_t0 = t0 - 22;
+		m_t0 = t0;
 
 		cmd = CMD_TURNON;
 		cmdTKN = CMD_RX_ENABLE;
@@ -1239,14 +1247,14 @@ implementation
 		cmd = CMD_NONE;
 
 		length = ((ieee154_header_t*) rxMsg -> header)->length;
-		((ieee154_metadata_t*) rxMsg -> metadata)->timestamp -= ((uint16_t)(length) << (RADIO_ALARM_MILLI_EXP - 5));
+		// ((ieee154_metadata_t*) rxMsg -> metadata)->timestamp -= ((uint16_t)(length) << (RADIO_ALARM_MILLI_EXP - 5));
 
 		// signal only if it has passed the CRC check
 		if( crc == 0 ){
 			rxMsg = signal RadioRx.received(rxMsg);
 		}
-		else
-			printf("CRC FAILED!\r\n");
+		// else
+		// 	printf("CRC FAILED!\r\n");
 	}
 
 /*----------------- IRQ -----------------*/
@@ -1347,14 +1355,16 @@ implementation
 					{
 						time32 = call LocalTime.get();
 
-						time -= RX_SFD_DELAY;
-						time >>= (MICA_DIVIDE_ONE_FOR_32KHZ_LOG2 - 1);
+						time += RX_SFD_DELAY;
+						time >>= ALARM_SCALE;
 
-						time32 = time32 - (uint16_t)time - (uint16_t)(time32 & T_PRESCAL_MASK) - 76;
+						time32 = time32 + (uint16_t)time - (uint16_t)(time32 & T_PRESCAL_MASK);
+
+						// time32 -= (RX_SFD_DELAY >> ALARM_SCALE);
+
+						printf("rx-");
 
 						((ieee154_metadata_t*) rxMsg -> metadata)->timestamp = time32;
-
-						printf("RX TIME - %lu\r\n", time32); printfflush();
 					}
 					else
 						call PacketTimeStamp.clear(rxMsg);
@@ -1799,11 +1809,13 @@ implementation
 
 		
 		time = (uint16_t) (time + TX_SFD_DELAY);
-		time >>= (MICA_DIVIDE_ONE_FOR_32KHZ_LOG2 - 1);
+		time >>= ALARM_SCALE;
 
 		time32 = time32 - (uint16_t)(time32 & T_PRESCAL_MASK) + (uint16_t)time;
 
-		printf("TX TIME - %lu\r\n", time32);
+		// time32 += (TX_SFD_DELAY >> ALARM_SCALE);
+
+		// printf("TX TIME - %lu\r\n", time32);
 
 		/*
 		 * There is a very small window (~1 microsecond) when the RF230 went 
@@ -1822,7 +1834,7 @@ implementation
 
 		// TODO: handle ACK logic here
 
-
+		printf("tx-");
 
 		((ieee154_txframe_t*) msg)->metadata->timestamp = time32;
 
