@@ -1,0 +1,50 @@
+DEPENDENCY.
+
+
+- RF230DriverHwAckC
+
+	interface RF230DriverConfig as Config; -> provided by RF230RadioP
+	
+	interface PacketTimeStamp<TRadio, uint32_t>; -> provided by TimeStampingLayerC
+	
+	interface Ieee154PacketLayer; -> provided by IPacketLayerC
+
+	interface PacketFlag as TransmitPowerFlag; -> provided by MetadataFlagsLayerC
+	
+	interface PacketFlag as RSSIFlag; -> provided by MetadataFlagsLayerC
+	
+	interface PacketFlag as TimeSyncFlag; -> provided by MetadataFlagsLayerC
+	
+	interface PacketFlag as AckReceivedFlag; -> provided by MetadataFlagsLayerC
+	
+	interface RadioAlarm; -> provided by RadioAlarmC
+
+
+- RF230RadioP
+	
+	interface Ieee154PacketLayer; -> same as above
+
+	interface RadioAlarm; -> same as above
+
+	interface RadioPacket as RF230Packet; -> provided by RF230DriverHwAckC
+
+	interface PacketTimeStamp<TRadio, uint32_t>; -> same as above
+
+- TimeStampingLayerC
+	
+	interface LocalTimeRadio; -> provided by RF230DriverHwAckC
+
+	interface SubPacket; -> provided by MetadataFlagsLayerC
+
+	interface TimeStampFlag; -> provided by MetadataFlagsLayerC
+
+- MetadataFlagsLayerC
+	
+	interface SubPacket; -> provided by RF230DriverHwAckC
+
+
+- RadioAlarmC
+	
+	interface Alarm; -> provided by RF230DriverHwAckC
+
+

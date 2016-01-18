@@ -1,0 +1,2 @@
+CFLAGS += -I$(TOSDIR)/platforms/iris/mac/wids \
+	-I$(TOSDIR)/chips/rf230_tkn154
